@@ -1,0 +1,20 @@
+{
+  "name": "party-games-2",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Mobile-first installable PWA with Heads Up, Charades and Undercover party games.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test \"test/**/*.test.js\"",
+    "test:e2e": "npm run build && node test/e2e/run.mjs",
+    "test:e2e:webkit": "npm run build && PW_BROWSER=webkit node test/e2e/run.mjs",
+    "icons": "node scripts/generate-icons.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.1",
+    "vite": "^5.4.11"
+  }
+}

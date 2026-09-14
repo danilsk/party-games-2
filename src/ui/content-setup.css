@@ -1,0 +1,47 @@
+.setup { flex: 1; display: flex; flex-direction: column; gap: var(--sp-5); }
+.setup-body { flex: 1; display: flex; flex-direction: column; gap: var(--sp-5); }
+
+.topic-btn {
+  display: flex; align-items: center; gap: var(--sp-4);
+  width: 100%; text-align: left;
+  padding: var(--sp-4) var(--sp-5);
+  border-radius: var(--r-lg);
+  background: linear-gradient(135deg, color-mix(in oklab, var(--accent-1) 22%, var(--surface-solid)), var(--surface-solid));
+  border: 1px solid var(--border);
+  transition: transform 0.18s var(--pop);
+}
+.topic-btn:active { transform: scale(0.98); }
+.topic-btn .t-emoji { font-size: 32px; }
+.topic-btn .t-name { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+
+.diff-dots { display: flex; gap: var(--sp-2); }
+.diff-dots button {
+  flex: 1; height: 52px;
+  border-radius: var(--r-md);
+  background: var(--surface); border: 1px solid var(--border);
+  font-size: 17px; font-weight: 800; color: var(--text-dim);
+  transition: transform 0.16s var(--pop), background 0.2s, color 0.2s;
+}
+.diff-dots button[aria-pressed='true'] {
+  background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+  color: var(--accent-ink); border-color: transparent;
+}
+.diff-dots button:active { transform: scale(0.93); }
+
+.topic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: var(--sp-2); }
+.topic-tile {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  min-height: 84px; padding: var(--sp-2);
+  border-radius: var(--r-md);
+  background: var(--surface); border: 1px solid var(--border);
+  font-size: 12.5px; font-weight: 700; text-align: center; line-height: 1.2;
+  transition: transform 0.16s var(--pop), background 0.2s;
+}
+.topic-tile .e { font-size: 26px; }
+.topic-tile[aria-pressed='true'] { background: var(--brand); color: #fff; border-color: transparent; }
+.topic-tile:active { transform: scale(0.94); }
+
+.feed-status { display: flex; align-items: center; gap: var(--sp-2); font-size: 13px; color: var(--text-dim); min-height: 22px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; }
+.dot.warn { background: var(--warn); }
+.dot.bad { background: var(--bad); }

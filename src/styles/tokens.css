@@ -1,0 +1,94 @@
+:root {
+  color-scheme: light dark;
+
+  --brand: #7c5cff;
+  --brand-ink: #ffffff;
+
+  --headsup-1: #d9ff43;
+  --headsup-2: #56e07a;
+  --headsup-ink: #10210b;
+  --charades-1: #ff4d9d;
+  --charades-2: #ff8a3d;
+  --charades-ink: #34041a;
+  --undercover-1: #3de0d8;
+  --undercover-2: #5ac8ff;
+  --undercover-ink: #04222b;
+
+  --ok: #37d67a;
+  --warn: #ffb020;
+  --bad: #ff4f5e;
+
+  --r-sm: 12px;
+  --r-md: 18px;
+  --r-lg: 26px;
+  --r-xl: 34px;
+  --r-full: 999px;
+
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 22px;
+  --sp-6: 30px;
+  --sp-7: 42px;
+  --sp-8: 60px;
+
+  --tap: 56px;
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Helvetica Neue', Arial, sans-serif;
+  --shell-pad: max(var(--sp-4), env(safe-area-inset-left));
+}
+
+:root,
+:root[data-theme='dark'] {
+  --bg: #0a0912;
+  --bg-2: #12101f;
+  --surface: rgba(255, 255, 255, 0.06);
+  --surface-2: rgba(255, 255, 255, 0.1);
+  --surface-solid: #191627;
+  --border: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.22);
+  --text: #f4f1ff;
+  --text-dim: rgba(244, 241, 255, 0.66);
+  --text-faint: rgba(244, 241, 255, 0.4);
+  --shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+  --glow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 20px 60px rgba(124, 92, 255, 0.28);
+}
+
+:root[data-theme='light'] {
+  --bg: #f6f3ff;
+  --bg-2: #ffffff;
+  --surface: rgba(18, 12, 40, 0.05);
+  --surface-2: rgba(18, 12, 40, 0.09);
+  --surface-solid: #ffffff;
+  --border: rgba(18, 12, 40, 0.12);
+  --border-strong: rgba(18, 12, 40, 0.24);
+  --text: #16112b;
+  --text-dim: rgba(22, 17, 43, 0.66);
+  --text-faint: rgba(22, 17, 43, 0.42);
+  --shadow: 0 18px 40px rgba(56, 40, 110, 0.16);
+  --glow: 0 0 0 1px rgba(18, 12, 40, 0.05), 0 18px 50px rgba(124, 92, 255, 0.2);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    --bg: #f6f3ff;
+    --bg-2: #ffffff;
+    --surface: rgba(18, 12, 40, 0.05);
+    --surface-2: rgba(18, 12, 40, 0.09);
+    --surface-solid: #ffffff;
+    --border: rgba(18, 12, 40, 0.12);
+    --border-strong: rgba(18, 12, 40, 0.24);
+    --text: #16112b;
+    --text-dim: rgba(22, 17, 43, 0.66);
+    --text-faint: rgba(22, 17, 43, 0.42);
+    --shadow: 0 18px 40px rgba(56, 40, 110, 0.16);
+    --glow: 0 0 0 1px rgba(18, 12, 40, 0.05), 0 18px 50px rgba(124, 92, 255, 0.2);
+  }
+}
+
+[data-game='headsup'] { --accent-1: var(--headsup-1); --accent-2: var(--headsup-2); --accent-ink: var(--headsup-ink); }
+[data-game='charades'] { --accent-1: var(--charades-1); --accent-2: var(--charades-2); --accent-ink: var(--charades-ink); }
+[data-game='undercover'] { --accent-1: var(--undercover-1); --accent-2: var(--undercover-2); --accent-ink: var(--undercover-ink); }

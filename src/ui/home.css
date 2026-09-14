@@ -1,0 +1,53 @@
+.home-hero { padding: var(--sp-5) 0 var(--sp-6); }
+.home-hero .kicker { font-size: 13px; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-faint); }
+.home-hero h1 {
+  font-size: clamp(40px, 13vw, 60px);
+  font-weight: 900; letter-spacing: -0.045em; line-height: 0.92;
+  margin-top: var(--sp-2);
+  background: linear-gradient(120deg, var(--text) 20%, var(--brand) 60%, #ff4d9d 95%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+.game-list { display: flex; flex-direction: column; gap: var(--sp-4); }
+
+.game-card {
+  position: relative; overflow: hidden;
+  display: flex; align-items: center; gap: var(--sp-4);
+  width: 100%; text-align: left;
+  padding: var(--sp-5);
+  border-radius: var(--r-xl);
+  border: none;
+  background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+  color: var(--accent-ink);
+  box-shadow: 0 14px 34px color-mix(in oklab, var(--accent-1) 30%, transparent);
+  transition: transform 0.22s var(--pop), box-shadow 0.22s;
+  animation: card-in 0.5s var(--ease) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+.game-card:active { transform: scale(0.975); }
+.game-card::after {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(80% 130% at 88% -10%, rgba(255, 255, 255, 0.55), transparent 62%);
+  opacity: 0.7; pointer-events: none;
+}
+@keyframes card-in { from { opacity: 0; transform: translateY(22px) scale(0.96); } }
+
+.game-card .emoji { font-size: 50px; line-height: 1; filter: drop-shadow(0 6px 14px rgba(0,0,0,.3)); }
+.game-card .meta { position: relative; z-index: 1; flex: 1; min-width: 0; }
+.game-card .name { font-size: 25px; font-weight: 900; letter-spacing: -0.03em; }
+.game-card .tag { font-size: 14px; color: color-mix(in oklab, var(--accent-ink) 75%, transparent); margin-top: 3px; font-weight: 600; }
+.game-card .players {
+  display: inline-block; margin-top: var(--sp-3);
+  font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 5px 11px; border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--accent-ink) 13%, transparent);
+  color: color-mix(in oklab, var(--accent-ink) 82%, transparent);
+}
+
+.home-foot { margin-top: var(--sp-6); display: flex; flex-direction: column; gap: var(--sp-3); }
+.install-pill {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md);
+  background: var(--surface); border: 1px dashed var(--border-strong);
+  font-size: 14px;
+}

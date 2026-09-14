@@ -1,0 +1,74 @@
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  text-rendering: optimizeLegibility;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: -30% -30% auto -30%;
+  height: 70vh;
+  background:
+    radial-gradient(50% 50% at 30% 30%, color-mix(in oklab, var(--accent-1, var(--brand)) 40%, transparent), transparent 70%),
+    radial-gradient(45% 45% at 75% 20%, color-mix(in oklab, var(--accent-2, #ff4d9d) 32%, transparent), transparent 70%);
+  filter: blur(40px);
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 0;
+  transition: opacity 0.6s var(--ease);
+}
+
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; border: none; background: none; touch-action: manipulation; }
+
+h1, h2, h3, p { margin: 0; }
+
+#app {
+  position: relative;
+  z-index: 1;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: calc(env(safe-area-inset-top) + var(--sp-4)) var(--shell-pad)
+    calc(env(safe-area-inset-bottom) + var(--sp-4));
+  animation: screen-in 0.36s var(--ease) both;
+}
+
+@keyframes screen-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.99); }
+}
+
+.noselect { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+:focus-visible { outline: 3px solid var(--brand); outline-offset: 3px; border-radius: 6px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

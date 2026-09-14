@@ -1,0 +1,43 @@
+.ch-stage { flex: 1; display: flex; flex-direction: column; gap: var(--sp-4); min-height: 0; }
+
+.ch-card {
+  position: relative; flex: 1; min-height: 0;
+  display: grid; place-items: center;
+  padding: var(--sp-5);
+  border-radius: var(--r-xl);
+  border: 2px solid var(--border);
+  background: linear-gradient(145deg, color-mix(in oklab, var(--accent-1) 16%, var(--surface-solid)), color-mix(in oklab, var(--accent-2) 10%, var(--surface-solid)));
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  touch-action: none;
+  transition: transform 0.18s var(--ease), border-color 0.25s;
+}
+.ch-card.held { transform: scale(0.985); border-color: var(--accent-1); }
+
+.ch-word {
+  max-width: 100%;
+  font-weight: 900; letter-spacing: -0.04em; line-height: 1.02;
+  text-align: center; text-wrap: balance; overflow-wrap: anywhere;
+  animation: word-in 0.28s var(--pop) both;
+}
+
+.ch-hidden {
+  display: flex; flex-direction: column; align-items: center; gap: var(--sp-3);
+  text-align: center; color: var(--text-dim);
+  animation: fade-in 0.3s var(--ease);
+}
+.ch-hidden .eye { font-size: 64px; animation: eye-pulse 2.6s var(--ease) infinite; }
+@keyframes eye-pulse { 0%, 100% { transform: scale(1); opacity: 0.8; } 50% { transform: scale(1.09); opacity: 1; } }
+.ch-hidden strong { font-size: 21px; font-weight: 900; color: var(--text); letter-spacing: -0.02em; }
+
+.ch-peek-bar {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 6px;
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+  transform-origin: left center; transform: scaleX(0);
+}
+.ch-peek-bar.running { transition: transform 2s linear; transform: scaleX(1); }
+
+.ch-meta { display: flex; align-items: center; justify-content: space-between; flex: none; }
+.ch-count { font-size: 15px; font-weight: 800; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+
+.ch-next { min-height: 78px; font-size: 22px; }
