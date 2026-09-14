@@ -86,7 +86,7 @@ export async function callOpenRouter({ apiKey, model, system, user, signal, maxT
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': location.origin,
+        ...(typeof location === 'undefined' ? {} : { 'HTTP-Referer': location.origin }),
         'X-Title': 'Party Games',
       },
       body: JSON.stringify({

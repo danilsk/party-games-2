@@ -54,7 +54,7 @@ export function openSettings() {
     body.append(
       section('Word generation',
         h('p', { class: 'tiny dim' },
-          'Bring your own OpenRouter key for endless fresh words. It is stored only on this device and sent straight to OpenRouter.'),
+          'Every word is written on demand, so the app needs your own OpenRouter key. It is stored only on this device and sent straight to OpenRouter.'),
         h('div', { class: 'banner' }, '🔐',
           h('span', {},
             h('strong', {}, 'Why your own key? '),
@@ -63,7 +63,7 @@ export function openSettings() {
         h('div', { class: 'row' }, modelField),
         h('div', { class: 'row' }, testBtn,
           h('a', { class: 'btn btn-ghost grow', href: 'https://openrouter.ai/keys', target: '_blank', rel: 'noopener noreferrer' }, 'Get a key ↗')),
-        h('p', { class: 'tiny dim' }, 'Without a key the app still plays using its built-in offline word packs.')
+        h('p', { class: 'tiny dim' }, 'A key is required — every word and word pair is generated on demand.')
       ),
 
       section('Feel',

@@ -7,7 +7,7 @@ export const GAMES = [
     emoji: '🙈',
     tagline: 'Phone on forehead. Tilt to score.',
     blurb: 'Hold the phone horizontally on your forehead and tilt it to mark guesses.',
-    players: '3+ players',
+    players: '2+ players',
     load: () => import('./headsup/index.js'),
   },
   {
@@ -16,7 +16,7 @@ export const GAMES = [
     emoji: '🎭',
     tagline: 'Peek, act it out, pass along.',
     blurb: 'A word flashes for two seconds. Hold to peek again, then act it out.',
-    players: '3+ players',
+    players: '2+ players',
     load: () => import('./charades/index.js'),
   },
   {

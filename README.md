@@ -1,18 +1,20 @@
 # Party Games
 
-An installable, offline-capable PWA with three pass-the-phone party games. Built for
-smartphones, no framework, no backend.
+An installable PWA with three pass-the-phone party games. Built for smartphones, no
+framework, no backend.
 
 **Live:** https://danilsk.github.io/party-games-2/
 
 | | |
 |---|---|
-| 🙈 **Heads Up** | Phone on your forehead, held horizontally. Tilt forward to score, back to skip. |
-| 🎭 **Charades** | The word flashes for two seconds, then hides. Press and hold to peek again. |
-| 🕵️ **Undercover** | Everyone gets the same word — except one spy, who gets a suspiciously similar one. |
+| 🙈 **Heads Up** | Phone on your forehead, held horizontally. Tilt forward to score, back to skip. 2+ players. |
+| 🎭 **Charades** | The word flashes for two seconds, then hides. Press and hold to peek again. 2+ players. |
+| 🕵️ **Undercover** | Everyone gets the same word — except one spy, who gets a suspiciously similar one. 4+ players. |
 
-Words come from your own OpenRouter key when you add one, and from bundled offline packs
-otherwise. Either way the app works with no network.
+Every word is written on demand by a model, so the app needs your own OpenRouter key. There
+is no bundled word list: nothing repeats, and any topic you can describe in a sentence
+works. The app shell is cached for fast loads and installability, but playing needs a
+connection.
 
 ## Quick start
 
@@ -37,7 +39,8 @@ and refreshes work on Pages without any server rewrites or `404.html` tricks.
 ## Word generation (bring your own key)
 
 Open **Settings → Word generation** and paste an [OpenRouter](https://openrouter.ai/keys)
-key. Default model is `openai/gpt-5.6-luna`; any OpenRouter model ID works.
+key. Default model is `openai/gpt-5.6-luna`; any OpenRouter model ID works. Without a key
+the games show a prompt to add one instead of a Start button.
 
 > **There is no built-in API key, by design.** This is a static site: anything shipped in
 > its source is readable by anyone who opens the page. Your key is stored in this
@@ -58,9 +61,12 @@ them. Topics never contaminate each other, and difficulty/format changes deliber
 Manage or clear it under **Settings → Word memory**.
 
 Batches are fetched ahead of demand (refill starts while ~14 items remain) and the queue is
-persisted, so a round never waits on the network. If a refill is still in flight when the
-buffer drains, the feed falls back to the bundled pack synchronously rather than showing
-an empty screen.
+persisted across sessions, so a round does not normally wait on the network. If the buffer
+does drain, the game shows a brief "getting more" state and resumes rather than dead-ending.
+
+The dedup window deliberately matches the window sent to the model. Filtering against more
+history than the model was told to avoid would silently discard legitimate items and look
+like the model returned nothing.
 
 ## Heads Up tilt detection
 
@@ -104,9 +110,9 @@ alternating play at 650 ms per word.
 ```
 test/tilt-core.test.js      25 tests — state machine, calibration, sign detection, recovery
 test/tilt-envelope.test.js   5 tests — shake sweep, detection floor, latency, rapid play
-test/content.test.js        19 tests — history isolation, refills, dedup, prompt shape
+test/content.test.js        20 tests — history isolation, refills, dedup, errors, prompts
 test/undercover.test.js     17 tests — spy assignment, phases, win conditions
-test/e2e/run.mjs            37 checks — the built bundle under /party-games-2/
+test/e2e/run.mjs            38 checks — the built bundle under /party-games-2/, API mocked
 test/e2e/live-generation.mjs         — opt-in, hits OpenRouter for real
 ```
 
@@ -135,14 +141,21 @@ OPENROUTER_API_KEY_GENERAL=sk-or-... node test/e2e/live-generation.mjs
 That is the whole contract. The home screen, router (`#/g/<id>`), per-game theming
 (`[data-game="<id>"]` accent tokens) and code-splitting follow automatically. Shared
 pieces worth reusing: `contentSetup()` for topic/difficulty/language controls,
-`wordFeed`/`pairFeed` for content, and `keepAwake`, `sfx`, `haptic`, `holdable`, `sheet`.
+`startButton()`/`noKeyBanner()` for the API-key gate, `wordFeed`/`pairFeed` for content,
+and `keepAwake`, `sfx`, `haptic`, `holdable`, `sheet`.
 
 ## Notes
 
 - Icons are generated from source, not committed as opaque binaries: `npm run icons`.
 - Sound is synthesized with the Web Audio API — no audio files to download.
 - The service worker precaches the app shell and hashed assets, serves assets cache-first
-  and navigations network-first, and never touches cross-origin requests.
+  and navigations network-first, and never touches cross-origin requests. It makes the app
+  load instantly and stay installable; it does not make the games playable offline.
+- Heads Up asks for real fullscreen on start, and the manifest prefers `fullscreen` over
+  `standalone` where the platform supports it.
+- Brave blocks motion sensors under Shields' fingerprinting protection. When no motion
+  arrives, Heads Up says so, offers a retry, and switches over automatically if the sensors
+  start working without a reload.
 - Screen sleep is held off with the Wake Lock API during Heads Up and Charades.
 - Verified on Chromium and WebKit (Safari's engine) at phone viewport sizes, driven by
   synthetic sensor input. It has not been run on physical handsets — the device-specific

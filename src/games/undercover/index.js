@@ -5,7 +5,7 @@ import { sfx, unlockAudio } from '../../core/audio.js'
 import { haptic } from '../../core/haptics.js'
 import { keepAwake } from '../../core/wakelock.js'
 import { pairFeed, feedConfigFromSettings } from '../../content/feed.js'
-import { contentSetup, feedStatusLine, muteButton } from '../../ui/content-setup.js'
+import { contentSetup, feedStatusLine, muteButton, startButton, noKeyBanner } from '../../ui/content-setup.js'
 import { lsGet, lsSet } from '../../core/storage.js'
 import {
   createGame, wordFor, alive, spyOf, markSeen, eliminate, spyComesForward,
@@ -73,6 +73,23 @@ function setupScreen(root, show) {
   }
   drawNames()
 
+  const banner = noKeyBanner()
+  const startBtn = startButton('▶︎  Deal words', async (btn) => {
+    unlockAudio()
+    btn.disabled = true
+    btn.textContent = 'Getting a pair…'
+    await pairFeed.prime()
+    const pair = await pairFeed.takeAsync()
+    btn.disabled = false
+    btn.textContent = '▶︎  Deal words'
+    if (!pair) return toast(pairFeed.status.error?.message || 'Could not get a word pair', { bad: true })
+    try {
+      show(playScreen, createGame({ names, pair }))
+    } catch (e) {
+      toast(e.message, { bad: true })
+    }
+  })
+
   const screen = h('div', { class: 'screen' },
     h('div', { class: 'topbar' },
       h('button', { class: 'icon-btn', 'aria-label': 'Back', onclick: () => back() }, '‹'),
@@ -92,28 +109,16 @@ function setupScreen(root, show) {
         nameList,
         contentSetup({ onChange: sync, showFormat: false })
       ),
-      h('div', { class: 'stack' },
-        status,
-        h('button', {
-          class: 'btn btn-primary btn-lg btn-block',
-          onclick: async () => {
-            unlockAudio(); haptic('select')
-            await pairFeed.prime()
-            const pair = pairFeed.take()
-            if (!pair) return toast('Could not get a word pair', { bad: true })
-            try {
-              show(playScreen, createGame({ names, pair }))
-            } catch (e) {
-              toast(e.message, { bad: true })
-            }
-          },
-        }, '▶︎  Deal words')
-      )
+      h('div', { class: 'stack' }, banner, status, startBtn)
     )
   )
   root.append(screen)
   sync()
-  return () => status.firstChild?.dispose?.()
+  return () => {
+    status.firstChild?.dispose?.()
+    startBtn.dispose?.()
+    banner.dispose?.()
+  }
 }
 
 function howToPlay() {

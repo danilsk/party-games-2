@@ -5,7 +5,7 @@ import { sfx, unlockAudio } from '../../core/audio.js'
 import { haptic } from '../../core/haptics.js'
 import { keepAwake } from '../../core/wakelock.js'
 import { wordFeed, feedConfigFromSettings } from '../../content/feed.js'
-import { contentSetup, feedStatusLine, muteButton } from '../../ui/content-setup.js'
+import { contentSetup, feedStatusLine, muteButton, startButton, noKeyBanner } from '../../ui/content-setup.js'
 import { fitWord } from '../headsup/fit.js'
 import './charades.css'
 
@@ -30,6 +30,18 @@ function setupScreen(root, show) {
     wordFeed.prime()
   }
 
+  const banner = noKeyBanner()
+  const startBtn = startButton('▶︎  Start', async (btn) => {
+    unlockAudio()
+    btn.disabled = true
+    btn.textContent = 'Getting words…'
+    await wordFeed.prime()
+    btn.disabled = false
+    btn.textContent = '▶︎  Start'
+    if (!wordFeed.size) return toast(wordFeed.status.error?.message || 'Could not get any words', { bad: true })
+    show(playScreen)
+  })
+
   const screen = h('div', { class: 'screen' },
     h('div', { class: 'topbar' },
       h('button', { class: 'icon-btn', 'aria-label': 'Back', onclick: () => back() }, '‹'),
@@ -39,22 +51,16 @@ function setupScreen(root, show) {
     ),
     h('div', { class: 'setup' },
       contentSetup({ onChange: sync }),
-      h('div', { class: 'stack' },
-        status,
-        h('button', {
-          class: 'btn btn-primary btn-lg btn-block',
-          onclick: async () => {
-            unlockAudio(); haptic('select')
-            await wordFeed.prime()
-            show(playScreen)
-          },
-        }, '▶︎  Start')
-      )
+      h('div', { class: 'stack' }, banner, status, startBtn)
     )
   )
   root.append(screen)
   sync()
-  return () => status.firstChild?.dispose?.()
+  return () => {
+    status.firstChild?.dispose?.()
+    startBtn.dispose?.()
+    banner.dispose?.()
+  }
 }
 
 function howToPlay() {
@@ -81,6 +87,10 @@ function playScreen(root, show) {
     h('div', { class: 'eye' }, '🫣'),
     h('strong', {}, 'Hold to peek'),
     h('span', { class: 'tiny' }, 'Press and hold anywhere on this card')
+  )
+  const loadingView = h('div', { class: 'ch-hidden' },
+    h('div', { class: 'spinner' }),
+    h('strong', {}, 'Writing more words…')
   )
   const card = h('div', {
     class: 'ch-card', role: 'button', tabindex: '0',
@@ -111,9 +121,19 @@ function playScreen(root, show) {
     clear(card).append(hiddenView, peekBar)
   }
 
-  const next = () => {
-    const w = wordFeed.take()
-    if (!w) return toast('No words left — check your connection', { bad: true })
+  const next = async () => {
+    let w = wordFeed.take()
+    if (!w) {
+      // Clear the old word first: it must never stay on screen while the next one loads.
+      state.word = null
+      hide()
+      clear(card).append(loadingView, peekBar)
+      nextBtn.disabled = true
+      w = await wordFeed.takeAsync()
+      nextBtn.disabled = false
+      clear(card).append(hiddenView, peekBar)
+      if (!w) return toast(wordFeed.status.error?.message || 'No words left', { bad: true })
+    }
     state.word = w
     state.shown++
     count.textContent = `${state.shown} ${state.shown === 1 ? 'word' : 'words'}`

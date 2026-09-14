@@ -175,18 +175,64 @@ export function feedStatusLine(feed) {
   const el = h('div', { class: 'feed-status', role: 'status' })
   const paint = (status, size) => {
     clear(el)
-    if (status.state === 'loading' && size < 5) {
+    if (status.state === 'no-key') {
+      el.append(h('span', { class: 'dot warn' }), 'Needs an OpenRouter key')
+    } else if (status.state === 'loading' && size < 5) {
       el.append(h('span', { class: 'spinner' }), 'Writing fresh words…')
-    } else if (status.state === 'error') {
-      el.append(h('span', { class: 'dot bad' }), `${status.error?.message || 'Generation failed'} — using built-in words`)
-    } else if (status.state === 'no-key') {
-      el.append(h('span', { class: 'dot warn' }), 'Built-in word pack · add a key in settings for fresh words')
+    } else if (status.state === 'error' && size < 5) {
+      el.append(h('span', { class: 'dot bad' }), status.error?.message || 'Generation failed')
+    } else if (size) {
+      el.append(h('span', { class: 'dot' }), `${size} ready`)
     } else {
-      el.append(h('span', { class: 'dot' }), `${size} ready${status.source === 'ai' ? ' · freshly written' : ''}`)
+      el.append(h('span', { class: 'dot warn' }), 'No words yet')
     }
   }
-  paint(feed.status, feed.size)
   const off = feed.subscribe(paint)
+  el.dispose = off
+  return el
+}
+
+/**
+ * Start button that turns into a key prompt when there is no API key, and stays
+ * in sync if the key is added from the settings sheet without leaving the screen.
+ */
+export function startButton(label, onStart) {
+  const btn = h('button', { class: 'btn btn-primary btn-lg btn-block' })
+  const hasKey = () => !!String(settings.get('apiKey') || '').trim()
+  const paint = () => {
+    btn.textContent = hasKey() ? label : '🔑  Add your OpenRouter key'
+  }
+  btn.onclick = async () => {
+    sfx('tap')
+    haptic('select')
+    if (!hasKey()) {
+      const { openSettings } = await import('./settings.js')
+      openSettings()
+      return
+    }
+    onStart(btn)
+  }
+  const off = settings.subscribe(paint)
+  paint()
+  btn.dispose = off
+  return btn
+}
+
+export function noKeyBanner() {
+  const el = h('div', {})
+  const paint = () => {
+    clear(el)
+    if (String(settings.get('apiKey') || '').trim()) return
+    el.append(
+      h('div', { class: 'banner' }, '🔑',
+        h('span', {},
+          'Words are written on demand by a model, so this app needs your own ',
+          h('strong', {}, 'OpenRouter key'),
+          '. Add one in settings — it is stored only on this device.'))
+    )
+  }
+  const off = settings.subscribe(paint)
+  paint()
   el.dispose = off
   return el
 }

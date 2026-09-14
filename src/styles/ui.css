@@ -136,6 +136,8 @@
 .sheet h3 { font-size: 22px; font-weight: 900; letter-spacing: -0.02em; margin-bottom: var(--sp-4); }
 
 @keyframes sheet-up { from { transform: translateY(100%); } }
+@keyframes sheet-down { to { transform: translateY(100%); } }
+@keyframes fade-out { to { opacity: 0; } }
 @keyframes fade-in { from { opacity: 0; } }
 
 .toast {

@@ -2,9 +2,21 @@
 
 import { TiltProcessor } from './tilt-core.js'
 
+const START_WAIT = 2600
+
 const isIOS = () =>
   /iP(hone|ad|od)/.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+
+/** Why motion might be silently unavailable, for actionable messaging. */
+export function sensorHints() {
+  const hints = []
+  if (!window.isSecureContext)
+    hints.push('This page is not on HTTPS — browsers block motion sensors outside a secure context.')
+  if (navigator.brave)
+    hints.push('Brave blocks motion sensors as part of Shields. Tap the Shields icon and turn off “Block fingerprinting” for this site, then try again.')
+  return hints
+}
 
 export function motionSupport() {
   const hasMotion = typeof window !== 'undefined' && 'DeviceMotionEvent' in window
@@ -14,12 +26,17 @@ export function motionSupport() {
 }
 
 export class TiltSensor {
-  constructor({ onEvent, onFrame, config } = {}) {
+  constructor({ onEvent, onFrame, onLate, config } = {}) {
     this.proc = new TiltProcessor(config)
     this.onEvent = onEvent || (() => {})
     this.onFrame = onFrame || (() => {})
+    this.onLate = onLate || (() => {})
     this.running = false
     this.gotSample = false
+    this.gaveUp = false
+    this.samples = 0
+    this.lastSampleAt = 0
+    this.hasGyro = false
     this.invert = 0
     this.proc.setAccelSignPrior(isIOS() ? -1 : 1)
     this._motion = this._motion.bind(this)
@@ -65,15 +82,18 @@ export class TiltSensor {
       const started = performance.now()
       const tick = () => {
         if (this.gotSample) return r(true)
-        if (performance.now() - started > 1400) return r(false)
-        requestAnimationFrame(tick)
+        if (performance.now() - started > START_WAIT) return r(false)
+        setTimeout(tick, 60)
       }
       tick()
     })
     if (!alive) {
-      this.stop()
-      return { ok: false, reason: 'no-data' }
+      // Stay subscribed: some devices deliver the first sample late, and Brave's
+      // fingerprint shield can be switched off without reloading the page.
+      this.gaveUp = true
+      return { ok: false, reason: 'no-data', hints: sensorHints() }
     }
+    this.gaveUp = false
     return { ok: true }
   }
 
@@ -88,10 +108,26 @@ export class TiltSensor {
     this.proc.updateOrientation(e.beta, e.gamma, performance.now())
   }
 
+  stats() {
+    return {
+      samples: this.samples,
+      hasGyro: this.hasGyro,
+      live: this.samples > 0 && performance.now() - this.lastSampleAt < 1000,
+    }
+  }
+
   _motion(e) {
     const a = e.accelerationIncludingGravity
-    if (!a || a.x == null) return
+    if (!a || a.x == null || (a.x === 0 && a.y === 0 && a.z === 0)) return
+    const first = !this.gotSample
     this.gotSample = true
+    this.samples++
+    this.lastSampleAt = performance.now()
+    if (e.rotationRate && e.rotationRate.beta != null) this.hasGyro = true
+    if (first && this.gaveUp) {
+      this.gaveUp = false
+      this.onLate()
+    }
     const r = e.rotationRate
     const s = this.invert ? -1 : 1
     const events = this.proc.update({

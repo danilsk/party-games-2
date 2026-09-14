@@ -45,11 +45,19 @@ export function toast(message, { bad = false, ms = 2600 } = {}) {
 }
 
 export function sheet(title, buildBody, { onClose } = {}) {
+  let closing = false
   const close = () => {
-    backdrop.remove()
-    panel.style.animation = 'sheet-up .26s var(--ease) reverse'
-    setTimeout(() => panel.remove(), 240)
+    if (closing) return
+    closing = true
     document.removeEventListener('keydown', onKey)
+    backdrop.style.animation = 'fade-out .26s var(--ease) forwards'
+    panel.style.animation = 'sheet-down .28s var(--ease) forwards'
+    const done = () => {
+      panel.remove()
+      backdrop.remove()
+    }
+    panel.addEventListener('animationend', done, { once: true })
+    setTimeout(done, 400)
     onClose?.()
   }
   const onKey = (e) => {

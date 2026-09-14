@@ -5,10 +5,26 @@ import { sfx, unlockAudio } from '../../core/audio.js'
 import { haptic } from '../../core/haptics.js'
 import { keepAwake } from '../../core/wakelock.js'
 import { wordFeed, feedConfigFromSettings } from '../../content/feed.js'
-import { contentSetup, feedStatusLine, muteButton } from '../../ui/content-setup.js'
-import { TiltSensor, motionSupport } from './tilt-sensor.js'
+import { contentSetup, feedStatusLine, muteButton, startButton, noKeyBanner } from '../../ui/content-setup.js'
+import { TiltSensor, motionSupport, sensorHints } from './tilt-sensor.js'
 import { fitWord } from './fit.js'
 import './headsup.css'
+
+async function goFullscreen() {
+  try {
+    await document.documentElement.requestFullscreen?.({ navigationUI: 'hide' })
+  } catch (e) {
+    /* unsupported (iOS Safari on iPhone) or refused: standalone display still applies */
+  }
+}
+
+function exitFullscreen() {
+  try {
+    if (document.fullscreenElement) document.exitFullscreen?.()
+  } catch (e) {
+    /* nothing to undo */
+  }
+}
 
 const SENSITIVITY = {
   easy: { triggerDeg: 24, dwellMs: 90, armTriggerDeg: 22, maxLinearG: 0.62 },
@@ -39,20 +55,23 @@ function setupScreen(root, show, ctx) {
     wordFeed.prime()
   }
 
-  const startBtn = h('button', { class: 'btn btn-primary btn-lg btn-block' }, '▶︎  Start round')
-  startBtn.onclick = async () => {
+  const banner = noKeyBanner()
+  const startBtn = startButton('▶︎  Start round', async (btn) => {
     unlockAudio()
-    haptic('select')
-    startBtn.disabled = true
-    startBtn.textContent = 'Getting ready…'
+    goFullscreen()
+    btn.disabled = true
+    btn.textContent = 'Getting ready…'
     const sensor = new TiltSensor({ config: SENSITIVITY[settings.get('headsUpSensitivity')] })
     sensor.setInvert(settings.get('invertTilt'))
-    const res = await sensor.start()
-    startBtn.disabled = false
-    startBtn.textContent = '▶︎  Start round'
-    await wordFeed.prime()
+    const [res] = await Promise.all([sensor.start(), wordFeed.prime()])
+    btn.disabled = false
+    btn.textContent = '▶︎  Start round'
+    if (!wordFeed.size) {
+      sensor.stop()
+      return toast(wordFeed.status.error?.message || 'Could not get any words', { bad: true })
+    }
     show((r, s, c) => roundScreen(r, s, c, { sensor, motion: res }))
-  }
+  })
 
   screen.append(
     h('div', { class: 'topbar' },
@@ -63,12 +82,16 @@ function setupScreen(root, show, ctx) {
     ),
     h('div', { class: 'setup' },
       contentSetup({ onChange: sync }),
-      h('div', { class: 'stack' }, status, startBtn)
+      h('div', { class: 'stack' }, banner, status, startBtn)
     )
   )
   root.append(screen)
   sync()
-  return () => status.firstChild?.dispose?.()
+  return () => {
+    status.firstChild?.dispose?.()
+    startBtn.dispose?.()
+    banner.dispose?.()
+  }
 }
 
 function howToPlay() {
@@ -145,12 +168,12 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
       surface.style.width = '100%'
       surface.style.height = '100%'
     }
-    requestAnimationFrame(() => fitWord(wordBox, word))
+    requestAnimationFrame(() => fitWord(wordBox, word, { fill: 0.84 }))
   }
   const onResize = () => {
     rotClass = 'stale'
     applyRotation(lastGx)
-    fitWord(wordBox, word)
+    fitWord(wordBox, word, { fill: 0.84 })
   }
   window.addEventListener('resize', onResize)
   window.addEventListener('orientationchange', onResize)
@@ -160,18 +183,23 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
 
   /* --------------------------------- rounds -------------------------------- */
 
-  const nextWord = () => {
-    const w = wordFeed.take()
+  const nextWord = async () => {
+    let w = wordFeed.take()
     if (!w) {
-      toast('Ran out of words', { bad: true })
-      return finish()
+      word.textContent = '…'
+      w = await wordFeed.takeAsync()
+      if (state.phase !== 'playing') return
+      if (!w) {
+        toast(wordFeed.status.error?.message || 'Ran out of words', { bad: true })
+        return finish()
+      }
     }
     state.current = w
     word.textContent = w
     word.style.animation = 'none'
     void word.offsetWidth
     word.style.animation = ''
-    fitWord(wordBox, word)
+    fitWord(wordBox, word, { fill: 0.84 })
   }
 
   const showFlash = (kind, mark) => {
@@ -339,11 +367,35 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
     }
     sensor.setMode('arming')
   } else {
+    const hints = motion.hints?.length ? motion.hints : sensorHints()
     prep.els.face.textContent = '📴'
-    prep.els.title.textContent = motion.reason === 'denied' ? 'Motion access denied' : 'No motion sensors'
-    prep.els.body.textContent = 'No problem — use the buttons on screen instead.'
+    prep.els.title.textContent =
+      motion.reason === 'denied' ? 'Motion access denied' : 'No motion detected'
+    prep.els.body.textContent = hints.length
+      ? hints[0]
+      : 'This phone is not reporting motion. Use the buttons on screen instead.'
+
+    const retry = h('button', { class: 'btn btn-lg' }, '↻ Try motion again')
+    retry.onclick = async () => {
+      retry.disabled = true
+      retry.textContent = 'Checking…'
+      const res = await sensor.start()
+      if (res.ok) {
+        show((r, s2, c) => roundScreen(r, s2, c, { sensor, motion: res }))
+        return
+      }
+      retry.disabled = false
+      retry.textContent = '↻ Try motion again'
+      toast('Still no motion from this device', { bad: true })
+    }
+    // The shield or permission can be changed without reloading, so listen for a late start.
+    sensor.onLate = () => {
+      toast('Motion sensors are working now')
+      show((r, s2, c) => roundScreen(r, s2, c, { sensor, motion: { ok: true } }))
+    }
     prep.append(
-      h('button', { class: 'btn btn-primary btn-lg', onclick: beginCountdown }, 'Start round')
+      h('button', { class: 'btn btn-primary btn-lg', onclick: beginCountdown }, 'Play with buttons'),
+      retry
     )
     surface.append(
       h('div', { class: 'hu-fallback' },
@@ -370,6 +422,7 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
     clearInterval(tick)
     sensor.stop()
     keepAwake(false)
+    exitFullscreen()
     window.removeEventListener('resize', onResize)
     window.removeEventListener('orientationchange', onResize)
     try { window.screen.orientation?.unlock?.() } catch (e) { /* not supported */ }

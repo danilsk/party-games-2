@@ -35,6 +35,14 @@ await page.addInitScript((key) => {
   )
 }, KEY)
 await page.goto(URL_, { waitUntil: 'networkidle' })
+// Start from a clean slate so the run is reproducible.
+await page.evaluate(async () => {
+  await new Promise((res) => {
+    const r = indexedDB.deleteDatabase('party-games')
+    r.onsuccess = r.onerror = r.onblocked = () => res()
+  })
+})
+await page.reload({ waitUntil: 'networkidle' })
 
 const run = (fn, arg) => page.evaluate(fn, arg)
 
@@ -44,12 +52,12 @@ console.log('\nLive OpenRouter generation\n')
 await page.goto(`${URL_}#/g/charades`, { waitUntil: 'networkidle' })
 await page.waitForSelector('.feed-status', { timeout: 5000 })
 await page.waitForFunction(
-  () => /freshly written/.test(document.querySelector('.feed-status')?.textContent || ''),
+  () => /\d+ ready/.test(document.querySelector('.feed-status')?.textContent || ''),
   { timeout: 45000 }
 ).catch(() => {})
 
 const statusText = await page.textContent('.feed-status')
-check('feed reports freshly generated content', /freshly written/.test(statusText), statusText.trim())
+check('feed reports generated content ready', /\d+ ready/.test(statusText), statusText.trim())
 
 await page.click('text=Start')
 await page.waitForSelector('.ch-word', { timeout: 15000 })
@@ -83,13 +91,26 @@ check('the played topic accumulated history', !!spaceRow && spaceRow.n >= 12, sp
 
 // Sustained play must cross batch boundaries without ever stalling.
 for (let i = 0; i < 20; i++) {
-  await page.waitForSelector('.ch-word', { timeout: 20000 })
+  const prev = words.at(-1)
+  await page.waitForFunction(
+    (p) => {
+      const el = document.querySelector('.ch-word')
+      return el && el.textContent.trim() && el.textContent.trim() !== p
+    },
+    prev,
+    { timeout: 30000 }
+  )
   words.push((await page.textContent('.ch-word')).trim())
   await page.click('.ch-next')
-  await new Promise((r) => setTimeout(r, 200))
 }
-const dupes = words.filter((w, i) => words.findIndex((x) => x.toLowerCase() === w.toLowerCase()) !== i)
-check('still no repeats after a refill crosses a batch boundary', dupes.length === 0, dupes.join(', '))
+const dupes = words
+  .map((w, i) => ({ w, i, first: words.findIndex((x) => x.toLowerCase() === w.toLowerCase()) }))
+  .filter((d) => d.first !== d.i)
+check(
+  'still no repeats after a refill crosses a batch boundary',
+  dupes.length === 0,
+  dupes.map((d) => `"${d.w}" at #${d.i} (first seen #${d.first}); total=${words.length}`).join(', ')
+)
 
 // Isolation: a different topic must not inherit the first topic's history.
 const keys = await run(async () => {

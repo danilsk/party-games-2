@@ -1,4 +1,4 @@
-// Synthesized SFX: no audio assets to download, works offline, tiny bundle.
+// Synthesized SFX: no audio assets to download, tiny bundle.
 import { settings } from './settings.js'
 
 let ctx = null

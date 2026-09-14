@@ -1,4 +1,4 @@
-// Prompt construction shared by the app and the offline prompt-validation harness.
+// Prompt construction, shared by the app and the prompt-validation harness.
 
 const FORMAT_RULE = {
   word: 'Every item MUST be a single word. Do not merge several words into one to satisfy this — choose a genuinely single-word item instead.',

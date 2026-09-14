@@ -46,13 +46,7 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
-        manualChunks: {
-          content: [
-            './src/content/packs/words.js',
-            './src/content/packs/pairs.js',
-            './src/content/packs/topics.js',
-          ],
-        },
+        manualChunks: { topics: ['./src/content/packs/topics.js'] },
       },
     },
   },

@@ -51,7 +51,28 @@ const ORIGIN = `http://localhost:${port}`
 const URL_ = `${ORIGIN}${BASE}`
 const browser = await (ENGINE === 'webkit' ? webkit : chromium).launch({ executablePath: EXE })
 
-async function newPage({ motion = false, offline = false } = {}) {
+let batchNo = 0
+/** Canned OpenRouter responses: unique every batch so dedup never starves a test. */
+async function mockApi(ctx) {
+  await ctx.route(
+    (url) => url.hostname === 'openrouter.ai',
+    async (route) => {
+    const body = JSON.parse(route.request().postData() || '{}')
+    const prompt = body.messages?.[1]?.content || ''
+    const n = ++batchNo
+    const content = /"pairs"/.test(prompt)
+      ? JSON.stringify({ pairs: Array.from({ length: 14 }, (_, i) => [`Civ${n}x${i}`, `Spy${n}x${i}`]) })
+      : JSON.stringify({ items: Array.from({ length: 30 }, (_, i) => `Word${n}x${i}`) })
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ choices: [{ message: { content } }] }),
+      })
+    }
+  )
+}
+
+async function newPage({ motion = false, offline = false, apiKey = true, sw = false } = {}) {
   const ctx = await browser.newContext({
     viewport: { width: 390, height: 844 },
     deviceScaleFactor: 3,
@@ -60,6 +81,24 @@ async function newPage({ motion = false, offline = false } = {}) {
     userAgent:
       'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
   })
+  if (!sw) {
+    // A controlled page routes fetches through the service worker, which bypasses
+    // Playwright's interception in WebKit and lets the mocked API escape to the network.
+    await ctx.addInitScript(() => {
+      if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.reject(new Error('sw disabled for tests'))
+    })
+  }
+  if (apiKey) {
+    await ctx.addInitScript(() => {
+      try {
+        const cur = JSON.parse(localStorage.getItem('pg2:settings') || '{}')
+        // Seed once: a reload must not clobber a key the test just typed.
+        if (!cur.apiKey)
+          localStorage.setItem('pg2:settings', JSON.stringify({ ...cur, apiKey: 'sk-or-v1-e2e', sound: false, haptics: false }))
+      } catch (e) {}
+    })
+    await mockApi(ctx)
+  }
   const page = await ctx.newPage()
   const errors = []
   page.on('pageerror', (e) => errors.push(String(e)))
@@ -121,6 +160,20 @@ await section('app shell', async () => {
     }
     assert(man.json.icons.some((i) => i.purpose === 'maskable'), 'no maskable icon')
   })
+  await check('with no API key, games gate behind a key prompt instead of playing', async () => {
+    const p3 = await newPage({ apiKey: false })
+    await p3.goto(`${URL_}#/g/charades`, { waitUntil: 'networkidle' })
+    await p3.waitForSelector('.btn-primary', { timeout: 5000 })
+    const label = await p3.textContent('.btn-primary')
+    assert(/OpenRouter key/i.test(label), `start button said "${label}"`)
+    assert(await p3.$('.banner'), 'no explanation banner')
+    assert(/Needs an OpenRouter key/i.test(await p3.textContent('.feed-status')), 'status not shown')
+    await p3.click('.btn-primary')
+    await p3.waitForSelector('.sheet', { timeout: 3000 })
+    assert(await p3.$('input[aria-label="OpenRouter API key"]'), 'settings did not open on the key field')
+    await p3.__ctx.close()
+  })
+
   await check('deep links into a game work on a cold load', async () => {
     const p2 = await newPage()
     await p2.goto(`${URL_}#/g/undercover`, { waitUntil: 'networkidle' })
@@ -279,7 +332,9 @@ await section('headsup fallback', async () => {
 
   await check('falls back to on-screen buttons with no motion sensors', async () => {
     await page.waitForSelector('.hu-fallback', { timeout: 4000 })
-    assert((await page.textContent('.hu-overlay h2')).match(/No motion sensors|denied/), 'no explanation shown')
+    const title = await page.textContent('.hu-overlay h2')
+    assert(title.match(/No motion detected|denied/), `no explanation shown: "${title}"`)
+    assert(await page.$('text=Try motion again'), 'no retry affordance')
   })
   await check('the fallback buttons score and advance words', async () => {
     await page.click('.hu-overlay button')
@@ -379,7 +434,7 @@ await section('headsup motion', async () => {
 
 /* ------------------------------ pwa / offline ----------------------------- */
 await section('pwa offline', async () => {
-  const page = await newPage()
+  const page = await newPage({ sw: true })
   await page.goto(URL_, { waitUntil: 'networkidle' })
   await check('the service worker registers and takes control', async () => {
     const ok = await page.evaluate(async () => {
@@ -399,12 +454,20 @@ await section('pwa offline', async () => {
     const names = await page.$$eval('.game-card .name', (e) => e.map((x) => x.textContent))
     assert(names.length === 3, `offline home showed ${names.length} cards`)
   })
-  await offlineCheck('a game still plays fully offline', async () => {
+  await offlineCheck('offline, a game says so instead of hanging', async () => {
+    // Last route registered wins: make the API genuinely unreachable, not mocked.
+    await page.__ctx.route(
+      (url) => url.hostname === 'openrouter.ai',
+      (route) => route.abort()
+    )
     await page.goto(`${URL_}#/g/charades`, { waitUntil: 'domcontentloaded' })
-    await page.click('text=Start')
-    await page.waitForSelector('.ch-word', { timeout: 8000 })
-    const w = (await page.textContent('.ch-word')).trim()
-    assert(w.length > 0, 'no offline word')
+    await page.waitForSelector('.btn-primary', { timeout: 8000 })
+    await page.click('.btn-primary')
+    await page.waitForFunction(
+      () => /unavailable|could not|failed|network/i.test(document.body.innerText),
+      { timeout: 20000 }
+    )
+    assert(!(await page.$('.ch-word')), 'must not show a word with no network')
   })
   await page.__ctx.close()
 })

@@ -1,6 +1,6 @@
 // Shrink-to-fit display text: binary search on font size against the available box.
 
-export function fitWord(box, el, { min = 18, max = 200 } = {}) {
+export function fitWord(box, el, { min = 18, max = 200, fill = 1 } = {}) {
   if (!box || !el || !el.textContent) return
   const w = box.clientWidth
   const h = box.clientHeight
@@ -14,5 +14,5 @@ export function fitWord(box, el, { min = 18, max = 200 } = {}) {
     if (el.scrollWidth <= w && el.scrollHeight <= h) lo = mid
     else hi = mid
   }
-  el.style.fontSize = `${Math.floor(lo)}px`
+  el.style.fontSize = `${Math.max(min, Math.floor(lo * fill))}px`
 }
