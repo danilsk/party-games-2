@@ -8,7 +8,7 @@ import { applyTheme } from './core/theme.js'
 import { unlockAudio } from './core/audio.js'
 import { h, clear, toast } from './ui/dom.js'
 import { installPrompt } from './core/install.js'
-import { enterFullscreen, exitFullscreen } from './core/fullscreen.js'
+import { installFullscreenGate } from './ui/fullscreen-gate.js'
 
 const root = document.getElementById('app')
 
@@ -29,7 +29,6 @@ document.addEventListener('pointerdown', unlock, { once: true, passive: true })
 document.addEventListener('touchstart', unlock, { once: true, passive: true })
 
 route('/', () => {
-  exitFullscreen()
   renderHome(root)
   return installPrompt.onChange(() => {
     if (location.hash === '' || location.hash === '#/') renderHome(root)
@@ -43,7 +42,6 @@ route('/g/:id', ({ id }) => {
     return
   }
   document.documentElement.dataset.game = id
-  enterFullscreen()
   clear(root).append(
     h('div', { class: 'screen center' }, h('div', { class: 'spinner', 'aria-label': 'Loading' }))
   )
@@ -73,6 +71,7 @@ route('/g/:id', ({ id }) => {
   }
 })
 
+installFullscreenGate()
 startRouter()
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {

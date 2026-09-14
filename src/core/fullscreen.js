@@ -1,19 +1,21 @@
-// Installed, the manifest already owns the system UI — calling the Fullscreen API on top of it
-// only re-runs the OS bar transitions and swallows the first back press. So it is used in a
-// browser tab only, and there it is held for as long as a game is open rather than per screen.
-const ownWindow = () =>
-  window.matchMedia('(display-mode: fullscreen), (display-mode: standalone), (display-mode: minimal-ui)')
-    .matches || navigator.standalone === true
+// Fullscreen is enforced app-wide: on Android only the Fullscreen API hides the status bar
+// for good, and it needs a real tap, so the gate in ui/fullscreen-gate.js takes that tap.
+const root = () => document.documentElement
 
-export function enterFullscreen(retry = true) {
-  const el = document.documentElement
-  if (ownWindow() || document.fullscreenElement || !el.requestFullscreen) return
-  el.requestFullscreen({ navigationUI: 'hide' }).catch(() => {
-    // No transient activation (deep link, reload, restored tab): take the next tap instead.
-    if (retry) document.addEventListener('pointerdown', () => enterFullscreen(false), { once: true })
-  })
+export const fullscreenSupported = () => typeof root().requestFullscreen === 'function'
+
+export const isFullscreen = () => !fullscreenSupported() || !!document.fullscreenElement
+
+export function requestFullscreen() {
+  if (isFullscreen()) return Promise.resolve()
+  return root().requestFullscreen({ navigationUI: 'hide' })
 }
 
-export function exitFullscreen() {
-  if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
+export function onFullscreenChange(fn) {
+  document.addEventListener('fullscreenchange', fn)
+  document.addEventListener('webkitfullscreenchange', fn)
+  return () => {
+    document.removeEventListener('fullscreenchange', fn)
+    document.removeEventListener('webkitfullscreenchange', fn)
+  }
 }

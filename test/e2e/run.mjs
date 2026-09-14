@@ -72,7 +72,7 @@ async function mockApi(ctx) {
   )
 }
 
-async function newPage({ motion = false, offline = false, apiKey = true, sw = false } = {}) {
+async function newPage({ motion = false, offline = false, apiKey = true, sw = false, fullscreen = true } = {}) {
   const ctx = await browser.newContext({
     viewport: { width: 390, height: 844 },
     deviceScaleFactor: 3,
@@ -81,6 +81,15 @@ async function newPage({ motion = false, offline = false, apiKey = true, sw = fa
     userAgent:
       'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
   })
+  if (fullscreen) {
+    // The gate covers the app until the document is fullscreen; pretend it already is.
+    await ctx.addInitScript(() => {
+      Object.defineProperty(document, 'fullscreenElement', {
+        get: () => document.documentElement,
+        configurable: true,
+      })
+    })
+  }
   if (!sw) {
     // A controlled page routes fetches through the service worker, which bypasses
     // Playwright's interception in WebKit and lets the mocked API escape to the network.
@@ -554,6 +563,57 @@ await section('settings', async () => {
   await page.__ctx.close()
 })
 
+/* ----------------------------- fullscreen gate ---------------------------- */
+await section('fullscreen gate', async () => {
+  const page = await newPage({ fullscreen: false })
+  await page.addInitScript(() => {
+    window.__fs = { el: null, requests: 0 }
+    Object.defineProperty(document, 'fullscreenElement', { get: () => window.__fs.el, configurable: true })
+    Element.prototype.requestFullscreen = function () {
+      window.__fs.requests++
+      if (window.__fs.deny) return Promise.reject(new Error('denied'))
+      window.__fs.el = this
+      document.dispatchEvent(new Event('fullscreenchange'))
+      return Promise.resolve()
+    }
+  })
+  await page.goto(URL_, { waitUntil: 'networkidle' })
+  await check('the gate covers the app until it is dismissed by a tap', async () => {
+    await page.waitForSelector('.fs-gate', { timeout: 3000 })
+    await page.click('.fs-gate')
+    await page.waitForSelector('.fs-gate', { state: 'detached', timeout: 3000 })
+    assert((await page.evaluate(() => window.__fs.requests)) === 1, 'fullscreen not requested')
+    await page.click('[data-game="charades"].game-card')
+    await page.waitForSelector('.setup')
+  })
+  await check('leaving fullscreen brings the gate straight back', async () => {
+    await page.evaluate(() => {
+      window.__fs.el = null
+      document.dispatchEvent(new Event('fullscreenchange'))
+    })
+    await page.waitForSelector('.fs-gate', { timeout: 3000 })
+    await page.click('.fs-gate')
+    await page.waitForSelector('.fs-gate', { state: 'detached', timeout: 3000 })
+    assert(!!(await page.$('.setup')), 'gate reset the current screen')
+  })
+  await check('a blocked request keeps the gate up with a retry hint', async () => {
+    await page.evaluate(() => {
+      window.__fs.deny = true
+      window.__fs.el = null
+      document.dispatchEvent(new Event('fullscreenchange'))
+    })
+    await page.waitForSelector('.fs-gate', { timeout: 3000 })
+    await page.click('.fs-gate')
+    await sleep(200)
+    assert(!!(await page.$('.fs-gate')), 'gate left on a failed request')
+    assert(/tap again/i.test(await page.textContent('.fs-gate-hint')), 'no retry hint')
+    await page.evaluate(() => { window.__fs.deny = false })
+    await page.click('.fs-gate')
+    await page.waitForSelector('.fs-gate', { state: 'detached', timeout: 3000 })
+  })
+  await page.__ctx.close()
+})
+
 /* ----------------------- installed app navigation ------------------------- */
 await section('installed app navigation', async () => {
   // Emulate only display-mode detection. Escape exercises the browser's real CloseWatcher;
@@ -564,11 +624,6 @@ await section('installed app navigation', async () => {
     window.matchMedia = (query) => query.includes('display-mode:')
       ? media(query.includes('display-mode: fullscreen') ? '(min-width: 0px)' : '(max-width: 0px)')
       : media(query)
-    window.fullscreenRequests = 0
-    Element.prototype.requestFullscreen = () => {
-      window.fullscreenRequests++
-      return Promise.reject(new Error('Installed apps must use manifest fullscreen'))
-    }
   })
   await page.goto(URL_, { waitUntil: 'networkidle' })
   await check('fullscreen install is identified correctly', async () => {
@@ -594,7 +649,6 @@ await section('installed app navigation', async () => {
     await page.waitForSelector('.game-card')
     await page.keyboard.press('Escape')
     assert(!!(await page.$('.game-card')), 'stale watcher acted at home')
-    assert((await page.evaluate(() => window.fullscreenRequests)) === 0, 'Fullscreen API called')
   })
   for (const game of ['headsup', 'charades', 'undercover']) {
     await check(`${game} direct launch Back returns home`, async () => {
@@ -604,7 +658,6 @@ await section('installed app navigation', async () => {
       await page.waitForSelector('.setup')
       await page.keyboard.press('Escape')
       await page.waitForSelector('.game-card')
-      assert((await page.evaluate(() => window.fullscreenRequests)) === 0, 'Fullscreen API called')
     })
   }
   await check('closing a sheet by tapping does not consume the next Back', async () => {

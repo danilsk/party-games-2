@@ -151,9 +151,11 @@ and `keepAwake`, `sfx`, `haptic`, `holdable`, `sheet`.
 - The service worker precaches the app shell and hashed assets, serves assets cache-first
   and navigations network-first, and never touches cross-origin requests. It makes the app
   load instantly and stay installable; it does not make the games playable offline.
-- Installed Android apps request `display: fullscreen` for every screen. This is separate
-  from JavaScript's Fullscreen API, which is used only in browser tabs. Android can still
-  reveal system bars with system gestures. The shell keeps its existing `svh` sizing.
+- Fullscreen is enforced everywhere: the manifest asks for `display: fullscreen`, and on top
+  of that a gate overlay covers the app whenever `document.fullscreenElement` is empty and
+  takes a tap to call `requestFullscreen()` — the only way to keep Android's status bar
+  hidden after a system gesture reveals it. The gate returns on every exit and leaves the
+  current screen intact. Where the Fullscreen API is missing (iOS Safari) it never appears.
 - Screens and sheets use `CloseWatcher` (Chrome 126+) to handle Android Back and desktop
   Escape before history navigation. They share the visible Back action, dispose their
   watchers on exit, and never add dummy history entries. Direct game shortcuts return to
@@ -163,7 +165,7 @@ and `keepAwake`, `sfx`, `haptic`, `holdable`, `sheet`.
 - The manifest is fetched network-first and its contents contribute to the service-worker
   cache version. Chrome's installed WebAPK metadata still updates separately: after deploying,
   reinstall for a clean display-mode test. Settings reports the actual display mode and Back
-  API. Desktop tests emulate fullscreen detection and exercise Escape; physical Android
+  API. Desktop tests emulate fullscreen state and exercise Escape; physical Android
   testing is still needed for system bars, gestures, rotation, and background/resume.
 - Brave blocks motion sensors under Shields' fingerprinting protection. When no motion
   arrives, Heads Up says so, offers a retry, and switches over automatically if the sensors

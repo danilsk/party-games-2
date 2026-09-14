@@ -1,0 +1,32 @@
+.fs-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  padding: var(--sp-6);
+  text-align: center;
+  background: var(--bg);
+  animation: fade-in 0.2s var(--ease) both;
+}
+
+.fs-gate-mark {
+  font-size: 64px;
+  animation: fs-gate-bob 2.4s var(--ease) infinite;
+}
+
+.fs-gate h1 { font-size: 28px; font-weight: 900; letter-spacing: -0.02em; }
+
+.fs-gate-hint {
+  font-size: 16px;
+  color: var(--text-dim);
+  max-width: 22ch;
+}
+
+@keyframes fs-gate-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
