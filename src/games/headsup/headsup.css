@@ -28,11 +28,12 @@
 }
 .hu-word span {
   max-width: 100%;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal; word-break: normal; hyphens: none;
   font-weight: 900; letter-spacing: -0.045em; line-height: 0.98;
   text-wrap: balance;
   animation: word-in 0.3s var(--pop) both;
 }
+.hu-word span.fit-break { overflow-wrap: anywhere; }
 
 .hu-top { display: flex; align-items: center; gap: 14px; flex: none; }
 .hu-timer-bar {

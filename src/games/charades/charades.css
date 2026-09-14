@@ -17,9 +17,11 @@
 .ch-word {
   max-width: 100%;
   font-weight: 900; letter-spacing: -0.04em; line-height: 1.02;
-  text-align: center; text-wrap: balance; overflow-wrap: anywhere;
+  text-align: center; text-wrap: balance;
+  overflow-wrap: normal; word-break: normal; hyphens: none;
   animation: word-in 0.28s var(--pop) both;
 }
+.ch-word.fit-break { overflow-wrap: anywhere; }
 
 .ch-hidden {
   display: flex; flex-direction: column; align-items: center; gap: var(--sp-3);
