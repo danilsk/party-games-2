@@ -91,7 +91,7 @@ export function openSettings() {
 
     body.append(
       h('p', { class: 'tiny dim center', style: { marginTop: 'var(--sp-4)' } },
-        `Party Games v${__APP_VERSION__} · ${installPrompt.standalone ? 'installed' : 'in browser'}`)
+        `Party Games v${__APP_VERSION__} · build ${__BUILD__} · ${installPrompt.standalone ? 'installed' : 'in browser'}`)
     )
     return body
   })

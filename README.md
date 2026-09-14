@@ -151,15 +151,20 @@ and `keepAwake`, `sfx`, `haptic`, `holdable`, `sheet`.
 - The service worker precaches the app shell and hashed assets, serves assets cache-first
   and navigations network-first, and never touches cross-origin requests. It makes the app
   load instantly and stay installable; it does not make the games playable offline.
-- The Fullscreen API is used in a browser tab only, and there it is held for as long as a
-  game is open rather than taken and dropped around every round — that toggling was what
-  made the system bars and margins jump. Installed, the manifest's `fullscreen` display
-  override already owns the system UI, so the API is never called: no bar transitions, and
-  the back button is not swallowed. The shell is sized in `svh` so a collapsing browser
-  toolbar cannot reflow a round either.
-- The hardware back button does exactly what the screen's own `‹` does: screens register
-  their back action with `interceptBack()` (so does `sheet()`), so back unwinds sheet →
-  screen → game → home instead of jumping straight out of the game.
+- The app does not run fullscreen. Android's immersive mode leaves a black band where the
+  status bar was until the first relayout, and its back button's standard action is "exit
+  fullscreen" — unpreventable from JS — so every back press fired a system-bar transition.
+  `display: standalone` has no such state. The Fullscreen API is used in a browser tab only
+  (never when installed), held for as long as a game is open rather than taken and dropped
+  around every round. The shell is sized in `svh` so a collapsing toolbar cannot reflow a
+  round either. Changing the display mode only reaches an installed app when Chrome updates
+  the WebAPK, so reinstall to pick it up.
+- The hardware back button does exactly what the screen's own `‹` does. A screen registers
+  its back action with `interceptBack()` and consumes the press that would leave the route,
+  putting the route back — it does not push a history entry of its own, because Chrome on
+  Android may skip script-pushed entries and walk straight out of the game. Overlays
+  (`sheet()`) do carry an entry, pushed inside the tap that opened them, since they have no
+  route to fall back on.
 - Brave blocks motion sensors under Shields' fingerprinting protection. When no motion
   arrives, Heads Up says so, offers a retry, and switches over automatically if the sensors
   start working without a reload.

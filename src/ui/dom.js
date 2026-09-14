@@ -77,7 +77,7 @@ export function sheet(title, buildBody, { onClose } = {}) {
   panel.append(buildBody(close))
   document.body.append(backdrop, panel)
   document.addEventListener('keydown', onKey)
-  offBack = interceptBack(close)
+  offBack = interceptBack(close, { entry: true })
   return close
 }
 
