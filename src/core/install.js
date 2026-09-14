@@ -16,9 +16,12 @@ export const installPrompt = {
     return !!deferred
   },
   get standalone() {
-    return (
-      window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true
-    )
+    return this.displayMode !== 'browser'
+  },
+  get displayMode() {
+    return ['fullscreen', 'standalone', 'minimal-ui'].find(
+      (mode) => window.matchMedia(`(display-mode: ${mode})`).matches
+    ) || (navigator.standalone === true ? 'standalone' : 'browser')
   },
   onChange(fn) {
     listeners.add(fn)

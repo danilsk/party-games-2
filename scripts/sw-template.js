@@ -1,6 +1,7 @@
 const CACHE = 'party-games-__VERSION__'
 const PRECACHE = __PRECACHE__
 const SHELL = new URL('./index.html', self.location).pathname
+const MANIFEST = new URL('./manifest.webmanifest', self.location).pathname
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -29,6 +30,19 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return
   const url = new URL(req.url)
   if (url.origin !== self.location.origin) return
+
+  if (url.pathname === MANIFEST) {
+    event.respondWith(
+      fetch(req, { cache: 'no-cache' }).then((res) => {
+        if (res.ok) {
+          const copy = res.clone()
+          event.waitUntil(caches.open(CACHE).then((c) => c.put(req, copy)))
+        }
+        return res
+      }).catch(() => caches.match(req))
+    )
+    return
+  }
 
   if (req.mode === 'navigate') {
     event.respondWith(

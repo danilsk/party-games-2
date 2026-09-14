@@ -124,8 +124,10 @@ function setupScreen(root, show) {
   root.append(screen)
   sync()
   const offCreds = onCredentialsChange(sync)
+  const offBack = interceptBack(goBack)
   return () => {
     live = false
+    offBack()
     offCreds()
     status.firstChild?.dispose?.()
     startBtn.dispose?.()

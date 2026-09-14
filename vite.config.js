@@ -26,6 +26,7 @@ function serviceWorker() {
       ]
       const version = createHash('sha256')
         .update(JSON.stringify(precache) + pkg.version)
+        .update(readFileSync('public/manifest.webmanifest'))
         .digest('hex')
         .slice(0, 12)
       const source = readFileSync('scripts/sw-template.js', 'utf8')

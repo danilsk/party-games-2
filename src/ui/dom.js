@@ -53,7 +53,6 @@ export function sheet(title, buildBody, { onClose } = {}) {
     if (closing) return
     closing = true
     offBack()
-    document.removeEventListener('keydown', onKey)
     backdrop.style.animation = 'fade-out .26s var(--ease) forwards'
     panel.style.animation = 'sheet-down .28s var(--ease) forwards'
     const done = () => {
@@ -64,9 +63,6 @@ export function sheet(title, buildBody, { onClose } = {}) {
     setTimeout(done, 400)
     onClose?.()
   }
-  const onKey = (e) => {
-    if (e.key === 'Escape') close()
-  }
   const backdrop = h('div', { class: 'sheet-backdrop', onclick: close })
   const panel = h(
     'div',
@@ -76,8 +72,7 @@ export function sheet(title, buildBody, { onClose } = {}) {
   )
   panel.append(buildBody(close))
   document.body.append(backdrop, panel)
-  document.addEventListener('keydown', onKey)
-  offBack = interceptBack(close, { entry: true })
+  offBack = interceptBack(close)
   return close
 }
 

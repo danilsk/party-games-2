@@ -149,7 +149,7 @@ await section('app shell', async () => {
       return { ok: r.ok, json: await r.json() }
     }, URL_)
     assert(man.ok, 'manifest 404')
-    assert(man.json.display === 'standalone', 'not standalone')
+    assert(man.json.display === 'fullscreen', 'not fullscreen')
     assert(man.json.start_url === './', 'start_url should be relative')
     for (const icon of man.json.icons) {
       const st = await page.evaluate(
@@ -550,6 +550,71 @@ await section('settings', async () => {
     await page.click('text=Use this topic')
     await sleep(300)
     assert((await page.textContent('.topic-btn')).includes('plumber'), 'custom topic not applied')
+  })
+  await page.__ctx.close()
+})
+
+/* ----------------------- installed app navigation ------------------------- */
+await section('installed app navigation', async () => {
+  // Emulate only display-mode detection. Escape exercises the browser's real CloseWatcher;
+  // these checks do not simulate Android system bars or its physical Back gesture.
+  const page = await newPage()
+  await page.addInitScript(() => {
+    const media = window.matchMedia.bind(window)
+    window.matchMedia = (query) => query.includes('display-mode:')
+      ? media(query.includes('display-mode: fullscreen') ? '(min-width: 0px)' : '(max-width: 0px)')
+      : media(query)
+    window.fullscreenRequests = 0
+    Element.prototype.requestFullscreen = () => {
+      window.fullscreenRequests++
+      return Promise.reject(new Error('Installed apps must use manifest fullscreen'))
+    }
+  })
+  await page.goto(URL_, { waitUntil: 'networkidle' })
+  await check('fullscreen install is identified correctly', async () => {
+    await page.click('button[aria-label="Settings"]')
+    assert((await page.textContent('.sheet')).includes('· fullscreen ·'), 'fullscreen mode not detected')
+    await page.keyboard.press('Escape')
+    await page.waitForSelector('.sheet', { state: 'detached' })
+  })
+  await check('Back closes sheet, then round, then setup without phantom history', async () => {
+    await page.click('[data-game="charades"].game-card')
+    await page.getByRole('button', { name: /Start/ }).click()
+    await page.waitForSelector('.ch-card')
+    const length = await page.evaluate(() => history.length)
+    await page.keyboard.press('Escape')
+    await page.waitForSelector('.setup')
+    assert(!(await page.$('.game-card')), 'Back skipped setup')
+    await page.click('[aria-label="How to play"]')
+    await page.keyboard.press('Escape')
+    await page.waitForSelector('.sheet', { state: 'detached' })
+    assert(!!(await page.$('.setup')), 'sheet dismissal also left setup')
+    assert((await page.evaluate(() => history.length)) === length, 'dismissal changed history')
+    await page.keyboard.press('Escape')
+    await page.waitForSelector('.game-card')
+    await page.keyboard.press('Escape')
+    assert(!!(await page.$('.game-card')), 'stale watcher acted at home')
+    assert((await page.evaluate(() => window.fullscreenRequests)) === 0, 'Fullscreen API called')
+  })
+  for (const game of ['headsup', 'charades', 'undercover']) {
+    await check(`${game} direct launch Back returns home`, async () => {
+      // Cross-document navigation resets app-owned history metadata.
+      await page.goto('about:blank')
+      await page.goto(`${URL_}#/g/${game}`, { waitUntil: 'networkidle' })
+      await page.waitForSelector('.setup')
+      await page.keyboard.press('Escape')
+      await page.waitForSelector('.game-card')
+      assert((await page.evaluate(() => window.fullscreenRequests)) === 0, 'Fullscreen API called')
+    })
+  }
+  await check('closing a sheet by tapping does not consume the next Back', async () => {
+    await page.click('[data-game="charades"].game-card')
+    await page.waitForSelector('.setup')
+    await page.click('[aria-label="How to play"]')
+    await page.click('.sheet-backdrop', { position: { x: 5, y: 5 } })
+    await page.waitForSelector('.sheet', { state: 'detached' })
+    await page.keyboard.press('Escape')
+    await page.waitForSelector('.game-card')
   })
   await page.__ctx.close()
 })

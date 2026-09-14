@@ -151,20 +151,20 @@ and `keepAwake`, `sfx`, `haptic`, `holdable`, `sheet`.
 - The service worker precaches the app shell and hashed assets, serves assets cache-first
   and navigations network-first, and never touches cross-origin requests. It makes the app
   load instantly and stay installable; it does not make the games playable offline.
-- The app does not run fullscreen. Android's immersive mode leaves a black band where the
-  status bar was until the first relayout, and its back button's standard action is "exit
-  fullscreen" — unpreventable from JS — so every back press fired a system-bar transition.
-  `display: standalone` has no such state. The Fullscreen API is used in a browser tab only
-  (never when installed), held for as long as a game is open rather than taken and dropped
-  around every round. The shell is sized in `svh` so a collapsing toolbar cannot reflow a
-  round either. Changing the display mode only reaches an installed app when Chrome updates
-  the WebAPK, so reinstall to pick it up.
-- The hardware back button does exactly what the screen's own `‹` does. A screen registers
-  its back action with `interceptBack()` and consumes the press that would leave the route,
-  putting the route back — it does not push a history entry of its own, because Chrome on
-  Android may skip script-pushed entries and walk straight out of the game. Overlays
-  (`sheet()`) do carry an entry, pushed inside the tap that opened them, since they have no
-  route to fall back on.
+- Installed Android apps request `display: fullscreen` for every screen. This is separate
+  from JavaScript's Fullscreen API, which is used only in browser tabs. Android can still
+  reveal system bars with system gestures. The shell keeps its existing `svh` sizing.
+- Screens and sheets use `CloseWatcher` (Chrome 126+) to handle Android Back and desktop
+  Escape before history navigation. They share the visible Back action, dispose their
+  watchers on exit, and never add dummy history entries. Direct game shortcuts return to
+  home even without earlier app history. At home, Back is left to the browser/OS.
+  Browsers without CloseWatcher support retain visible Back controls and an Escape fallback;
+  their system Back navigates between routes rather than dismissing internal game screens.
+- The manifest is fetched network-first and its contents contribute to the service-worker
+  cache version. Chrome's installed WebAPK metadata still updates separately: after deploying,
+  reinstall for a clean display-mode test. Settings reports the actual display mode and Back
+  API. Desktop tests emulate fullscreen detection and exercise Escape; physical Android
+  testing is still needed for system bars, gestures, rotation, and background/resume.
 - Brave blocks motion sensors under Shields' fingerprinting protection. When no motion
   arrives, Heads Up says so, offers a retry, and switches over automatically if the sensors
   start working without a reload.
