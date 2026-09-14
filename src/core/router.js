@@ -2,6 +2,9 @@
 
 const routes = []
 let current = null
+let routeHash = ''
+// Screens inside a game are not routes, but the hardware back button must still reach them.
+const backStack = []
 
 export function route(pattern, handler) {
   const keys = []
@@ -30,8 +33,28 @@ export function back() {
   else navigate('/')
 }
 
+/** Register what the hardware back button should do on this screen; returns a disposer. */
+export function interceptBack(fn) {
+  const entry = { fn }
+  backStack.push(entry)
+  history.pushState({ pgBack: backStack.length }, '')
+  return () => {
+    const i = backStack.indexOf(entry)
+    if (i >= 0) backStack.splice(i, 1)
+  }
+}
+
+function onPopState() {
+  if (location.hash !== routeHash) return // a route change; hashchange resolves it
+  const entry = backStack.pop()
+  if (entry) entry.fn()
+  else back()
+}
+
 export function resolve() {
   const path = location.hash.slice(1) || '/'
+  routeHash = location.hash
+  backStack.length = 0
   for (const r of routes) {
     const m = path.match(r.rx)
     if (!m) continue
@@ -52,6 +75,7 @@ export function resolve() {
 
 export function startRouter() {
   window.addEventListener('hashchange', resolve)
+  window.addEventListener('popstate', onPopState)
   resolve()
 }
 

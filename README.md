@@ -151,8 +151,11 @@ and `keepAwake`, `sfx`, `haptic`, `holdable`, `sheet`.
 - The service worker precaches the app shell and hashed assets, serves assets cache-first
   and navigations network-first, and never touches cross-origin requests. It makes the app
   load instantly and stay installable; it does not make the games playable offline.
-- Heads Up asks for real fullscreen on start, and the manifest prefers `fullscreen` over
-  `standalone` where the platform supports it.
+- No fullscreen juggling: the browser/OS chrome stays put and the layout is sized in `svh`,
+  so a collapsing toolbar never reflows a round mid-play.
+- The hardware back button does exactly what the screen's own `‹` does: screens register
+  their back action with `interceptBack()` (so does `sheet()`), so back unwinds sheet →
+  screen → game → home instead of jumping straight out of the game.
 - Brave blocks motion sensors under Shields' fingerprinting protection. When no motion
   arrives, Heads Up says so, offers a retry, and switches over automatically if the sensors
   start working without a reload.

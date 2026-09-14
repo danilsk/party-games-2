@@ -1,5 +1,5 @@
 import { h, clear, toast } from '../../ui/dom.js'
-import { back, navigate } from '../../core/router.js'
+import { back, navigate, interceptBack } from '../../core/router.js'
 import { settings, activeTopic, activeLanguage } from '../../core/settings.js'
 import { sfx, unlockAudio } from '../../core/audio.js'
 import { haptic } from '../../core/haptics.js'
@@ -9,22 +9,6 @@ import { contentSetup, feedStatusLine, muteButton, startButton, noKeyBanner, onC
 import { TiltSensor, motionSupport, sensorHints } from './tilt-sensor.js'
 import { fitWord } from './fit.js'
 import './headsup.css'
-
-async function goFullscreen() {
-  try {
-    await document.documentElement.requestFullscreen?.({ navigationUI: 'hide' })
-  } catch (e) {
-    /* unsupported (iOS Safari on iPhone) or refused: standalone display still applies */
-  }
-}
-
-function exitFullscreen() {
-  try {
-    if (document.fullscreenElement) document.exitFullscreen?.()
-  } catch (e) {
-    /* nothing to undo */
-  }
-}
 
 const SENSITIVITY = {
   easy: { triggerDeg: 24, dwellMs: 90, armTriggerDeg: 22, maxLinearG: 0.62 },
@@ -61,7 +45,6 @@ function setupScreen(root, show, ctx) {
   const banner = noKeyBanner()
   const startBtn = startButton('▶︎  Start round', async (btn) => {
     unlockAudio()
-    goFullscreen()
     btn.disabled = true
     btn.textContent = 'Getting ready…'
     const sensor = new TiltSensor({ config: SENSITIVITY[settings.get('headsUpSensitivity')] })
@@ -72,15 +55,15 @@ function setupScreen(root, show, ctx) {
     btn.textContent = '▶︎  Start round'
     if (!wordFeed.size) {
       sensor.stop()
-      exitFullscreen()
       return toast(wordFeed.status.error?.message || 'Could not get any words', { bad: true })
     }
     show((r, s, c) => roundScreen(r, s, c, { sensor, motion: res }))
   })
 
+  const goBack = () => back()
   screen.append(
     h('div', { class: 'topbar' },
-      h('button', { class: 'icon-btn', 'aria-label': 'Back', onclick: () => back() }, '‹'),
+      h('button', { class: 'icon-btn', 'aria-label': 'Back', onclick: goBack }, '‹'),
       h('h2', {}, '🙈 Heads Up'),
       muteButton(),
       h('button', { class: 'icon-btn', 'aria-label': 'How to play', onclick: howToPlay }, '?')
@@ -93,9 +76,11 @@ function setupScreen(root, show, ctx) {
   root.append(screen)
   sync()
   const offCreds = onCredentialsChange(sync)
+  const offBack = interceptBack(goBack)
   return () => {
     live = false
     offCreds()
+    offBack()
     status.firstChild?.dispose?.()
     startBtn.dispose?.()
     banner.dispose?.()
@@ -142,10 +127,8 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
   const hint = h('div', { class: 'hu-hint' })
   const wordBox = h('div', { class: 'hu-word' }, word)
 
-  const closeBtn = h('button', {
-    class: 'hu-close', 'aria-label': 'End round',
-    onclick: () => (state.phase === 'playing' ? finish() : show(setupScreen)),
-  }, '✕')
+  const goBack = () => (state.phase === 'playing' ? finish() : show(setupScreen))
+  const closeBtn = h('button', { class: 'hu-close', 'aria-label': 'End round', onclick: goBack }, '✕')
   const surface = h('div', { class: 'hu-surface' },
     h('div', { class: 'hu-top' }, closeBtn, scoreEl, h('div', { class: 'hu-timer-bar' }, fill), clock),
     wordBox,
@@ -438,15 +421,16 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
 
   document.body.append(stage)
   applyRotation(null)
+  const offBack = interceptBack(goBack)
 
   return () => {
     live = false
+    offBack()
     for (const id of timers) clearTimeout(id)
     timers.clear()
     clearInterval(tick)
     sensor.stop()
     keepAwake(false)
-    exitFullscreen()
     window.removeEventListener('resize', onResize)
     window.removeEventListener('orientationchange', onResize)
     try { window.screen.orientation?.unlock?.() } catch (e) { /* not supported */ }
@@ -459,9 +443,10 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
 function resultsScreen(root, show, ctx, state) {
   clear(root)
   const got = state.results.filter((r) => r.correct).length
+  const goBack = () => show(setupScreen)
   const screen = h('div', { class: 'screen' },
     h('div', { class: 'topbar' },
-      h('button', { class: 'icon-btn', 'aria-label': 'Home', onclick: () => navigate('/') }, '‹'),
+      h('button', { class: 'icon-btn', 'aria-label': 'Back to setup', onclick: goBack }, '‹'),
       h('h2', {}, 'Round over')
     ),
     h('div', { class: 'center stack', style: { padding: 'var(--sp-5) 0' } },
@@ -483,5 +468,5 @@ function resultsScreen(root, show, ctx, state) {
   )
   root.append(screen)
   sfx('tap')
-  return () => {}
+  return interceptBack(goBack)
 }

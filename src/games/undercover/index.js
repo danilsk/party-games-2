@@ -1,5 +1,5 @@
 import { h, clear, toast, sheet, holdable } from '../../ui/dom.js'
-import { back, navigate } from '../../core/router.js'
+import { back, navigate, interceptBack } from '../../core/router.js'
 import { settings, activeTopic, activeLanguage } from '../../core/settings.js'
 import { sfx, unlockAudio } from '../../core/audio.js'
 import { haptic } from '../../core/haptics.js'
@@ -13,7 +13,7 @@ import {
 } from './game.js'
 import './undercover.css'
 
-const HOLD_MS = 1000
+const HOLD_MS = 550
 
 export function mount(root) {
   let teardown = () => {}
@@ -97,9 +97,10 @@ function setupScreen(root, show) {
     }
   })
 
+  const goBack = () => back()
   const screen = h('div', { class: 'screen' },
     h('div', { class: 'topbar' },
-      h('button', { class: 'icon-btn', 'aria-label': 'Back', onclick: () => back() }, '‹'),
+      h('button', { class: 'icon-btn', 'aria-label': 'Back', onclick: goBack }, '‹'),
       h('h2', {}, '🕵️ Undercover'),
       muteButton(),
       h('button', { class: 'icon-btn', 'aria-label': 'How to play', onclick: howToPlay }, '?')
@@ -122,9 +123,11 @@ function setupScreen(root, show) {
   root.append(screen)
   sync()
   const offCreds = onCredentialsChange(sync)
+  const offBack = interceptBack(goBack)
   return () => {
     live = false
     offCreds()
+    offBack()
     status.firstChild?.dispose?.()
     startBtn.dispose?.()
     banner.dispose?.()
@@ -253,9 +256,10 @@ function playScreen(root, show, game) {
     },
   }, '🙋  Spy comes forward')
 
+  const goBack = () => show(setupScreen)
   const screen = h('div', { class: 'screen' },
     h('div', { class: 'topbar' },
-      h('button', { class: 'icon-btn', 'aria-label': 'Back to setup', onclick: () => show(setupScreen) }, '‹'),
+      h('button', { class: 'icon-btn', 'aria-label': 'Back to setup', onclick: goBack }, '‹'),
       h('h2', {}, '🕵️ Undercover'),
       muteButton(),
       h('button', { class: 'icon-btn', 'aria-label': 'How to play', onclick: howToPlay }, '?')
@@ -267,7 +271,9 @@ function playScreen(root, show, game) {
   )
   root.append(screen)
   draw()
+  const offBack = interceptBack(goBack)
   return () => {
+    offBack()
     endPeek?.()
     holds.forEach((d) => d())
     keepAwake(false)
@@ -281,9 +287,10 @@ function revealScreen(root, show, game) {
   keepAwake(false)
   setTimeout(() => { sfx('end'); haptic('end') }, 120)
 
+  const goBack = () => show(setupScreen)
   const screen = h('div', { class: 'screen' },
     h('div', { class: 'topbar' },
-      h('button', { class: 'icon-btn', 'aria-label': 'Home', onclick: () => navigate('/') }, '‹'),
+      h('button', { class: 'icon-btn', 'aria-label': 'Back to setup', onclick: goBack }, '‹'),
       h('h2', {}, 'The words')
     ),
     h('div', { class: 'setup' },
@@ -302,5 +309,5 @@ function revealScreen(root, show, game) {
     )
   )
   root.append(screen)
-  return () => {}
+  return interceptBack(goBack)
 }

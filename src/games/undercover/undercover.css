@@ -50,21 +50,21 @@
 
 .uc-secret {
   position: fixed; inset: 0; z-index: 70;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--sp-4);
-  padding: var(--sp-6) var(--sp-5);
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: var(--sp-3);
+  padding: calc(env(safe-area-inset-top) + var(--sp-6)) var(--sp-5) var(--sp-6);
   background: var(--bg);
   text-align: center;
   animation: fade-in 0.16s var(--ease);
 }
 .uc-secret .who { font-size: 14px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-faint); }
 .uc-secret .word {
-  font-size: clamp(40px, 15vw, 82px); font-weight: 900; letter-spacing: -0.045em; line-height: 1.02;
-  overflow-wrap: anywhere;
+  font-size: clamp(40px, 15vw, 82px); font-weight: 900; letter-spacing: -0.03em; line-height: 1.1;
+  padding: 0 0.1em; overflow-wrap: anywhere;
   background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
   -webkit-background-clip: text; background-clip: text; color: transparent;
   animation: word-in 0.3s var(--pop) both;
 }
-.uc-secret .keep { font-size: 14px; color: var(--text-dim); }
+.uc-secret .keep { margin-top: auto; font-size: 14px; color: var(--text-dim); }
 
 .uc-count { display: flex; align-items: center; gap: var(--sp-3); }
 .uc-count button {

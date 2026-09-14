@@ -1,5 +1,5 @@
 import { h, clear, toast, holdable, sheet } from '../../ui/dom.js'
-import { back, navigate } from '../../core/router.js'
+import { back, interceptBack } from '../../core/router.js'
 import { settings, activeTopic, activeLanguage } from '../../core/settings.js'
 import { sfx, unlockAudio } from '../../core/audio.js'
 import { haptic } from '../../core/haptics.js'
@@ -10,7 +10,7 @@ import { fitWord } from '../headsup/fit.js'
 import './charades.css'
 
 const PEEK_MS = 2000
-const HOLD_MS = 1000
+const HOLD_MS = 550
 
 export function mount(root, ctx) {
   let teardown = () => {}
@@ -47,9 +47,10 @@ function setupScreen(root, show) {
     show(playScreen)
   })
 
+  const goBack = () => back()
   const screen = h('div', { class: 'screen' },
     h('div', { class: 'topbar' },
-      h('button', { class: 'icon-btn', 'aria-label': 'Back', onclick: () => back() }, '‹'),
+      h('button', { class: 'icon-btn', 'aria-label': 'Back', onclick: goBack }, '‹'),
       h('h2', {}, '🎭 Charades'),
       muteButton(),
       h('button', { class: 'icon-btn', 'aria-label': 'How to play', onclick: howToPlay }, '?')
@@ -62,9 +63,11 @@ function setupScreen(root, show) {
   root.append(screen)
   sync()
   const offCreds = onCredentialsChange(sync)
+  const offBack = interceptBack(goBack)
   return () => {
     live = false
     offCreds()
+    offBack()
     status.firstChild?.dispose?.()
     startBtn.dispose?.()
     banner.dispose?.()
@@ -200,9 +203,10 @@ function playScreen(root, show) {
 
   const nextBtn = h('button', { class: 'btn btn-primary btn-lg btn-block ch-next', onclick: next }, 'Next word  →')
 
+  const goBack = () => show(setupScreen)
   const screen = h('div', { class: 'screen' },
     h('div', { class: 'topbar' },
-      h('button', { class: 'icon-btn', 'aria-label': 'Back to setup', onclick: () => show(setupScreen) }, '‹'),
+      h('button', { class: 'icon-btn', 'aria-label': 'Back to setup', onclick: goBack }, '‹'),
       h('h2', {}, '🎭 Charades'),
       muteButton(),
       h('button', { class: 'icon-btn', 'aria-label': 'How to play', onclick: howToPlay }, '?')
@@ -217,9 +221,11 @@ function playScreen(root, show) {
   next()
   window.addEventListener('resize', onResize)
   function onResize() { if (state.revealed) fitWord(card, wordEl, { max: 58, fill: 0.94 }) }
+  const offBack = interceptBack(goBack)
 
   return () => {
     live = false
+    offBack()
     clearTimeout(hideTimer)
     release()
     disposeHold()

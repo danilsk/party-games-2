@@ -53,7 +53,6 @@ export function renderHome(root) {
       }, '📲', h('span', { class: 'grow' }, 'Install to your home screen'), '›')
     )
   }
-  foot.append(h('p', { class: 'tiny dim center' }, 'Every word is written fresh · add your OpenRouter key in settings to play'))
-  screen.append(foot)
+  if (foot.childElementCount) screen.append(foot)
   root.append(screen)
 }

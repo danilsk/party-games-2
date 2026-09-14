@@ -1,3 +1,5 @@
+import { interceptBack } from '../core/router.js'
+
 const SVG_NS = 'http://www.w3.org/2000/svg'
 const SVG_TAGS = new Set([
   'svg', 'g', 'defs', 'circle', 'ellipse', 'rect', 'line', 'path', 'polyline', 'polygon',
@@ -46,9 +48,11 @@ export function toast(message, { bad = false, ms = 2600 } = {}) {
 
 export function sheet(title, buildBody, { onClose } = {}) {
   let closing = false
+  let offBack = () => {}
   const close = () => {
     if (closing) return
     closing = true
+    offBack()
     document.removeEventListener('keydown', onKey)
     backdrop.style.animation = 'fade-out .26s var(--ease) forwards'
     panel.style.animation = 'sheet-down .28s var(--ease) forwards'
@@ -73,6 +77,7 @@ export function sheet(title, buildBody, { onClose } = {}) {
   panel.append(buildBody(close))
   document.body.append(backdrop, panel)
   document.addEventListener('keydown', onKey)
+  offBack = interceptBack(close)
   return close
 }
 
