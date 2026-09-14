@@ -121,21 +121,22 @@ export function segmented(options, value, onChange, { label } = {}) {
   return wrap
 }
 
-/** Press-and-hold with a progress callback; cancels cleanly on scroll, leave or blur. */
+/** Press-and-hold with a progress callback; cancels cleanly on release, cancel or blur. */
 export function holdable(el, { holdMs = 2000, onStart, onProgress, onComplete, onCancel } = {}) {
   const ac = new AbortController()
   const opts = { signal: ac.signal }
   let raf = 0
   let startedAt = 0
-  let active = false
+  let pointer = null
   const stop = (completed) => {
-    if (!active) return
-    active = false
+    if (pointer === null) return
+    if (el.hasPointerCapture?.(pointer)) el.releasePointerCapture(pointer)
+    pointer = null
     cancelAnimationFrame(raf)
     if (!completed) onCancel?.()
   }
   const frame = () => {
-    if (!active) return
+    if (pointer === null) return
     const p = Math.min(1, (performance.now() - startedAt) / holdMs)
     onProgress?.(p)
     if (p >= 1) {
@@ -146,18 +147,22 @@ export function holdable(el, { holdMs = 2000, onStart, onProgress, onComplete, o
     raf = requestAnimationFrame(frame)
   }
   const begin = (e) => {
-    if (active) return
+    if (pointer !== null) return
     if (e.pointerType === 'mouse' && e.button !== 0) return
-    active = true
+    e.preventDefault() // suppress the iOS selection callout, which cancels the gesture
+    el.focus?.({ preventScroll: true })
+    pointer = e.pointerId
     startedAt = performance.now()
     el.setPointerCapture?.(e.pointerId)
     onStart?.()
     raf = requestAnimationFrame(frame)
   }
+  // Pointer capture keeps the gesture alive as the finger drifts, so only a real
+  // release, an OS cancel or a backgrounded window ends it.
+  const end = (e) => { if (e.pointerId === pointer) stop(false) }
   el.addEventListener('pointerdown', begin, opts)
-  el.addEventListener('pointerup', () => stop(false), opts)
-  el.addEventListener('pointercancel', () => stop(false), opts)
-  el.addEventListener('pointerleave', () => stop(false), opts)
+  el.addEventListener('pointerup', end, opts)
+  el.addEventListener('pointercancel', end, opts)
   el.addEventListener('contextmenu', (e) => e.preventDefault(), opts)
   window.addEventListener('blur', () => stop(false), opts)
   return () => {

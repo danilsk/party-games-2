@@ -1,26 +1,10 @@
-// Pure Undercover rules. No DOM, so the secrecy and win conditions are unit-testable.
+// Pure Undercover rules. No DOM, so the secrecy rules are unit-testable.
 
 export const MIN_PLAYERS = 4
 export const MAX_PLAYERS = 12
 
 export function defaultNames(n) {
   return Array.from({ length: n }, (_, i) => `Player ${i + 1}`)
-}
-
-export function normalizeGuess(s) {
-  return String(s || '')
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^\p{L}\p{N}]+/gu, '')
-    .trim()
-}
-
-export function guessMatches(guess, target) {
-  const a = normalizeGuess(guess)
-  const b = normalizeGuess(target)
-  if (!a || !b) return false
-  return a === b || (a.length > 3 && (a.includes(b) || b.includes(a)))
 }
 
 export function createGame({ names, pair, rng = Math.random }) {
@@ -38,9 +22,8 @@ export function createGame({ names, pair, rng = Math.random }) {
     })),
     civilianWord: pair[0],
     spyWord: pair[1],
-    phase: 'reveal', // reveal -> discuss -> guess -> over
-    outcome: null,
-    accused: null,
+    phase: 'reveal', // reveal -> play
+    revealed: false,
   }
 }
 
@@ -51,44 +34,26 @@ export const allSeen = (g) => g.players.every((p) => p.seen)
 
 export function markSeen(g, id) {
   g.players[id].seen = true
-  if (allSeen(g) && g.phase === 'reveal') g.phase = 'discuss'
+  if (g.phase === 'reveal' && allSeen(g)) g.phase = 'play'
   return g
 }
 
-/** Eliminate a player. Returns the transition so the UI knows what to show next. */
+/** Knock a player out. Nobody may be knocked out before they have read their word. */
 export function eliminate(g, id) {
   const p = g.players[id]
-  if (g.phase !== 'discuss' || p.out) return { kind: 'noop' }
+  if (!p || !p.seen || p.out) return { kind: 'noop' }
   p.out = true
-  if (p.spy) {
-    g.phase = 'guess'
-    g.accused = id
-    return { kind: 'caught-spy' }
-  }
-  if (alive(g).length <= 2) {
-    g.phase = 'over'
-    g.outcome = { winner: 'spy', reason: 'outnumbered' }
-    return { kind: 'spy-wins' }
-  }
-  return { kind: 'civilian-out' }
+  return { kind: 'out' }
 }
 
-export function spyComesForward(g) {
-  if (g.phase !== 'discuss') return { kind: 'noop' }
-  const spy = spyOf(g)
-  spy.out = true
-  g.phase = 'guess'
-  g.accused = spy.id
-  g.surrendered = true
-  return { kind: 'caught-spy' }
+export function revive(g, id) {
+  const p = g.players[id]
+  if (!p || !p.out) return { kind: 'noop' }
+  p.out = false
+  return { kind: 'back' }
 }
 
-export function submitGuess(g, guess) {
-  if (g.phase !== 'guess') return g.outcome
-  const correct = guessMatches(guess, g.civilianWord)
-  g.phase = 'over'
-  g.outcome = correct
-    ? { winner: 'spy', reason: 'guessed', guess }
-    : { winner: 'civilians', reason: g.surrendered ? 'surrendered' : 'caught', guess }
-  return g.outcome
+export function revealWords(g) {
+  g.revealed = true
+  return g
 }

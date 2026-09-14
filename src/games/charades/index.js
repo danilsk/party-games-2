@@ -10,6 +10,7 @@ import { fitWord } from '../headsup/fit.js'
 import './charades.css'
 
 const PEEK_MS = 2000
+const HOLD_MS = 1000
 
 export function mount(root, ctx) {
   let teardown = () => {}
@@ -108,7 +109,7 @@ function playScreen(root, show) {
     wordEl.style.animation = 'none'
     void wordEl.offsetWidth
     wordEl.style.animation = ''
-    fitWord(card, wordEl, { max: 120 })
+    fitWord(card, wordEl, { max: 58, fill: 0.94 })
     if (!temporary) sfx('reveal')
   }
 
@@ -167,7 +168,21 @@ function playScreen(root, show) {
     hide()
     sfx('hide')
   }
-  holdable(card, { holdMs: 60000, onStart: peekStart, onCancel: peekEnd })
+  const release = () => {
+    window.removeEventListener('pointerup', release)
+    window.removeEventListener('pointercancel', release)
+    peekEnd()
+  }
+  const disposeHold = holdable(card, {
+    holdMs: HOLD_MS,
+    onProgress: (v) => { if (!state.revealed) peekBar.style.transform = `scaleX(${v})` },
+    onCancel: () => { if (!state.revealed) peekBar.style.transform = 'scaleX(0)' },
+    onComplete: () => {
+      peekStart()
+      window.addEventListener('pointerup', release)
+      window.addEventListener('pointercancel', release)
+    },
+  })
   card.addEventListener('keydown', (e) => {
     if (e.repeat) return
     if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); peekStart() }
@@ -192,10 +207,12 @@ function playScreen(root, show) {
   root.append(screen)
   next()
   window.addEventListener('resize', onResize)
-  function onResize() { if (state.revealed) fitWord(card, wordEl, { max: 120 }) }
+  function onResize() { if (state.revealed) fitWord(card, wordEl, { max: 58, fill: 0.94 }) }
 
   return () => {
     clearTimeout(hideTimer)
+    release()
+    disposeHold()
     keepAwake(false)
     window.removeEventListener('resize', onResize)
   }

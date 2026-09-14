@@ -14,6 +14,15 @@ const root = document.getElementById('app')
 applyTheme()
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme)
 
+// Long-press callouts and pinch/double-tap zoom fire pointercancel, which kills hold-to-reveal.
+const isTextField = (t) => t instanceof Element && t.closest('input, textarea, [contenteditable]')
+for (const type of ['contextmenu', 'selectstart', 'dragstart']) {
+  document.addEventListener(type, (e) => { if (!isTextField(e.target)) e.preventDefault() })
+}
+for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
+  document.addEventListener(type, (e) => e.preventDefault(), { passive: false })
+}
+
 const unlock = () => unlockAudio()
 document.addEventListener('pointerdown', unlock, { once: true, passive: true })
 document.addEventListener('touchstart', unlock, { once: true, passive: true })

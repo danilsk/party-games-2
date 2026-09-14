@@ -252,7 +252,7 @@ await section('undercover', async () => {
   await page.waitForSelector('.uc-player', { timeout: 5000 })
 
   const holdReveal = async (i) => {
-    const el = await page.$(`.uc-player >> nth=${i}`)
+    const el = await page.$(`.uc-player .hold >> nth=${i}`)
     const box = await el.boundingBox()
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
     await page.mouse.down()
@@ -265,11 +265,14 @@ await section('undercover', async () => {
 
   let words = []
   await check('a quick tap does not leak the secret word', async () => {
-    await page.click('.uc-player >> nth=0', { delay: 120 })
+    await page.click('.uc-player .hold >> nth=0', { delay: 120 })
     await sleep(250)
     assert(!(await page.$('.uc-secret')), 'word revealed by a tap')
   })
-  await check('holding a card reveals that player word, hidden again on release', async () => {
+  await check('a player cannot be knocked out before they have looked', async () => {
+    assert(await page.isDisabled('.uc-player .kill >> nth=0'), 'kill button live before the reveal')
+  })
+  await check('holding a row reveals that player word, hidden again on release', async () => {
     for (let i = 0; i < 5; i++) words.push(await holdReveal(i))
     assert(words.every(Boolean), 'a word failed to show')
     assert(!(await page.$('.uc-secret')), 'secret overlay stuck open')
@@ -280,42 +283,30 @@ await section('undercover', async () => {
     const vals = Object.values(counts).sort((a, b) => b - a)
     assert(vals.length === 2 && vals[0] === 4 && vals[1] === 1, `distribution ${JSON.stringify(counts)}`)
   })
-  await check('the discussion phase unlocks after everyone has looked', async () => {
-    await page.waitForSelector('text=Spy comes forward', { timeout: 3000 })
+  await check('the same word can be read again after everyone has looked', async () => {
     assert((await page.textContent('.tiny.dim.center')).includes('5 still in'))
+    assert((await holdReveal(0)) === words[0], 're-reading gave a different word')
   })
-  await check('eliminating a player runs the confirm flow', async () => {
-    await page.click('.uc-player >> nth=0')
+  await check('knocking a player out runs the confirm flow and is reversible', async () => {
+    await page.click('.uc-player .kill >> nth=0')
     await page.waitForSelector('.sheet', { timeout: 3000 })
     await page.click('.sheet .btn-danger')
-    await sleep(400)
-    const outOrEnded = (await page.$('.uc-player.out')) || (await page.$('.uc-verdict')) || (await page.$('input[aria-label="Spy guess"]'))
-    assert(outOrEnded, 'nothing happened on elimination')
+    await page.waitForSelector('.uc-player.out', { timeout: 3000 })
+    await page.click('.uc-player.out .kill.back')
+    await sleep(300)
+    assert(!(await page.$('.uc-player.out')), 'player was not brought back')
   })
-  await check('the spy can come forward and the game reaches a verdict', async () => {
-    const p2 = await newPage()
-    await p2.goto(`${URL_}#/g/undercover`, { waitUntil: 'networkidle' })
-    await p2.click('text=Deal words')
-    await p2.waitForSelector('.uc-player', { timeout: 5000 })
-    const n = (await p2.$$('.uc-player')).length
-    for (let i = 0; i < n; i++) {
-      const box = await (await p2.$(`.uc-player >> nth=${i}`)).boundingBox()
-      await p2.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-      await p2.mouse.down()
-      await p2.waitForSelector('.uc-secret', { timeout: 4000 })
-      await p2.mouse.up()
-      await p2.waitForSelector('.uc-secret', { state: 'detached', timeout: 3000 })
-    }
-    await p2.click('text=Spy comes forward')
-    await p2.click('text=I am the spy')
-    await p2.waitForSelector('input[aria-label="Spy guess"]', { timeout: 4000 })
-    await p2.fill('input[aria-label="Spy guess"]', 'definitely not the word')
-    await p2.click('text=Lock in guess')
-    await p2.waitForSelector('.uc-verdict', { timeout: 4000 })
-    const verdict = await p2.textContent('.uc-verdict .big')
-    assert(verdict.includes('Civilians win'), `got "${verdict}"`)
-    assert((await p2.$$('.uc-words .w')).length === 2, 'both words not shown')
-    await p2.__ctx.close()
+  await check('showing the words ends the round without declaring a winner', async () => {
+    await page.click('text=Show the words')
+    await page.waitForSelector('.sheet', { timeout: 3000 })
+    await page.click('text=Show them')
+    await page.waitForSelector('.uc-reveal', { timeout: 4000 })
+    const shown = await page.$$eval('.uc-words .w', (els) => els.map((e) => e.textContent.trim()))
+    assert(shown.length === 2, 'both words not shown')
+    assert(shown.every((w) => words.includes(w)), `revealed ${JSON.stringify(shown)} not in ${JSON.stringify(words)}`)
+    const body = await page.textContent('.uc-reveal')
+    assert(!/wins?\b/i.test(body), `a winner was declared: ${body}`)
+    assert(/was the spy/.test(body), 'the spy was not named')
   })
   await check('undercover produced no errors', async () => {
     assert(page.__errors.length === 0, page.__errors.join('; '))

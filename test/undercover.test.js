@@ -1,13 +1,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  createGame, wordFor, alive, spyOf, markSeen, eliminate, spyComesForward,
-  submitGuess, guessMatches, defaultNames, MIN_PLAYERS,
+  createGame, wordFor, alive, spyOf, markSeen, allSeen, eliminate, revive, revealWords,
+  defaultNames, MIN_PLAYERS,
 } from '../src/games/undercover/game.js'
 
 const PAIR = ['Sea', 'Lake']
 const mk = (n = 5, spyIndex = 2) =>
   createGame({ names: defaultNames(n), pair: PAIR, rng: () => spyIndex / n })
+const seeAll = (g) => g.players.forEach((p) => markSeen(g, p.id))
 
 test('requires at least four players', () => {
   assert.throws(() => createGame({ names: defaultNames(3), pair: PAIR }), /at least 4/)
@@ -40,109 +41,57 @@ test('the reveal phase only ends once every player has looked', () => {
   for (let i = 0; i < 3; i++) {
     markSeen(g, i)
     assert.equal(g.phase, 'reveal')
+    assert.equal(allSeen(g), false)
   }
   markSeen(g, 3)
-  assert.equal(g.phase, 'discuss')
+  assert.equal(g.phase, 'play')
+  assert.equal(allSeen(g), true)
 })
 
-test('eliminations are blocked before the discussion phase', () => {
+test('re-reading a word is always allowed and changes nothing', () => {
+  const g = mk(5)
+  seeAll(g)
+  markSeen(g, 0)
+  assert.equal(g.phase, 'play')
+  assert.equal(wordFor(g, spyOf(g).id), 'Lake')
+})
+
+test('a player cannot be knocked out before they have read their word', () => {
   const g = mk(5)
   assert.equal(eliminate(g, 0).kind, 'noop')
   assert.equal(g.players[0].out, false)
+  markSeen(g, 0)
+  assert.equal(eliminate(g, 0).kind, 'out')
+  assert.equal(g.players[0].out, true)
 })
 
-test('eliminating a civilian keeps the game going', () => {
-  const g = mk(6, 5)
-  g.players.forEach((p) => markSeen(g, p.id))
-  const res = eliminate(g, 0)
-  assert.equal(res.kind, 'civilian-out')
-  assert.equal(g.phase, 'discuss')
-  assert.equal(alive(g).length, 5)
-})
-
-test('eliminating the spy moves to the guess phase', () => {
+test('knocking out the spy is not announced by the rules', () => {
   const g = mk(5, 2)
-  g.players.forEach((p) => markSeen(g, p.id))
+  seeAll(g)
   const res = eliminate(g, spyOf(g).id)
-  assert.equal(res.kind, 'caught-spy')
-  assert.equal(g.phase, 'guess')
+  assert.equal(res.kind, 'out')
+  assert.equal(g.phase, 'play')
+  assert.equal(g.revealed, false)
 })
 
-test('the spy wins by outlasting the group down to two players', () => {
-  const g = mk(4, 3)
-  g.players.forEach((p) => markSeen(g, p.id))
-  assert.equal(eliminate(g, 0).kind, 'civilian-out')
-  const res = eliminate(g, 1)
-  assert.equal(res.kind, 'spy-wins')
-  assert.equal(g.phase, 'over')
-  assert.equal(g.outcome.winner, 'spy')
-})
-
-test('a caught spy who guesses the civilian word steals the win', () => {
-  const g = mk(5, 1)
-  g.players.forEach((p) => markSeen(g, p.id))
-  eliminate(g, spyOf(g).id)
-  const out = submitGuess(g, 'sea')
-  assert.equal(out.winner, 'spy')
-  assert.equal(out.reason, 'guessed')
-  assert.equal(g.phase, 'over')
-})
-
-test('a caught spy who guesses wrong loses', () => {
-  const g = mk(5, 1)
-  g.players.forEach((p) => markSeen(g, p.id))
-  eliminate(g, spyOf(g).id)
-  const out = submitGuess(g, 'mountain')
-  assert.equal(out.winner, 'civilians')
-  assert.equal(out.reason, 'caught')
-})
-
-test('the spy can come forward voluntarily and still gets a guess', () => {
-  const g = mk(6, 4)
-  g.players.forEach((p) => markSeen(g, p.id))
-  const res = spyComesForward(g)
-  assert.equal(res.kind, 'caught-spy')
-  assert.equal(g.phase, 'guess')
-  assert.equal(spyOf(g).out, true)
-  assert.equal(submitGuess(g, 'Sea').winner, 'spy')
-})
-
-test('coming forward and failing the guess is a civilian win', () => {
-  const g = mk(6, 4)
-  g.players.forEach((p) => markSeen(g, p.id))
-  spyComesForward(g)
-  const out = submitGuess(g, 'river')
-  assert.equal(out.winner, 'civilians')
-  assert.equal(out.reason, 'surrendered')
-})
-
-test('guesses are matched forgivingly but not loosely', () => {
-  assert.ok(guessMatches('Sea', 'sea'))
-  assert.ok(guessMatches('  SEA! ', 'Sea'))
-  assert.ok(guessMatches('Кофе', 'кофе'))
-  assert.ok(guessMatches('ice cream', 'Ice-cream'))
-  assert.ok(!guessMatches('lake', 'sea'))
-  assert.ok(!guessMatches('', 'sea'))
-  assert.ok(!guessMatches('sea', ''))
-})
-
-test('a blank guess loses rather than crashing', () => {
-  const g = mk(5, 0)
-  g.players.forEach((p) => markSeen(g, p.id))
-  eliminate(g, spyOf(g).id)
-  assert.equal(submitGuess(g, '').winner, 'civilians')
-})
-
-test('the game cannot be mutated once it is over', () => {
-  const g = mk(5, 0)
-  g.players.forEach((p) => markSeen(g, p.id))
-  eliminate(g, spyOf(g).id)
-  submitGuess(g, 'sea')
-  const snapshot = JSON.stringify(g.outcome)
-  submitGuess(g, 'something else')
-  assert.equal(JSON.stringify(g.outcome), snapshot)
+test('knocking out is idempotent and reversible', () => {
+  const g = mk(5)
+  seeAll(g)
+  eliminate(g, 1)
   assert.equal(eliminate(g, 1).kind, 'noop')
-  assert.equal(spyComesForward(g).kind, 'noop')
+  assert.equal(alive(g).length, 4)
+  assert.equal(revive(g, 1).kind, 'back')
+  assert.equal(alive(g).length, 5)
+  assert.equal(revive(g, 1).kind, 'noop')
+})
+
+test('revealing the words only flips a flag', () => {
+  const g = mk(5)
+  seeAll(g)
+  revealWords(g)
+  assert.equal(g.revealed, true)
+  assert.equal(g.civilianWord, 'Sea')
+  assert.equal(g.spyWord, 'Lake')
 })
 
 test('player names are trimmed and blanks fall back to a seat number', () => {
