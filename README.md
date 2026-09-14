@@ -151,8 +151,11 @@ and `keepAwake`, `sfx`, `haptic`, `holdable`, `sheet`.
 - The service worker precaches the app shell and hashed assets, serves assets cache-first
   and navigations network-first, and never touches cross-origin requests. It makes the app
   load instantly and stay installable; it does not make the games playable offline.
-- No fullscreen juggling: the browser/OS chrome stays put and the layout is sized in `svh`,
-  so a collapsing toolbar never reflows a round mid-play.
+- Fullscreen is taken once when a game opens and released on the way back home, never per
+  screen — toggling it mid-round was what made the chrome and margins jump. Installed, the
+  manifest's `fullscreen` display override does the same job with no API call at all. The
+  shell is sized in `svh` so a collapsing toolbar cannot reflow a round either way. In a
+  browser tab on Android, the system back button exits fullscreen before it navigates.
 - The hardware back button does exactly what the screen's own `‹` does: screens register
   their back action with `interceptBack()` (so does `sheet()`), so back unwinds sheet →
   screen → game → home instead of jumping straight out of the game.

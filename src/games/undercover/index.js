@@ -7,6 +7,7 @@ import { keepAwake } from '../../core/wakelock.js'
 import { pairFeed, feedConfigFromSettings } from '../../content/feed.js'
 import { contentSetup, feedStatusLine, muteButton, startButton, noKeyBanner, onCredentialsChange } from '../../ui/content-setup.js'
 import { lsGet, lsSet } from '../../core/storage.js'
+import { fitWord } from '../headsup/fit.js'
 import {
   createGame, wordFor, alive, spyOf, markSeen, eliminate, revive, revealWords,
   defaultNames, MIN_PLAYERS, MAX_PLAYERS,
@@ -155,13 +156,20 @@ function playScreen(root, show, game) {
   const list = h('div', { class: 'uc-players' })
   const hint = h('p', { class: 'tiny dim center' })
 
-  const peekWord = (p) => {
-    const overlay = h('div', { class: 'uc-secret' },
+  const peekWord = (p, row) => {
+    const r = row.getBoundingClientRect()
+    const end = r.top + r.height / 2 < window.innerHeight / 2 ? 'at-bottom' : 'at-top'
+    const word = h('div', { class: 'word' }, wordFor(game, p.id))
+    const box = h('div', { class: 'wordbox' }, word)
+    const overlay = h('div', { class: `uc-secret ${end}${p.spy ? ' spy' : ''}` },
       h('div', { class: 'who' }, p.name),
-      h('div', { class: 'word' }, wordFor(game, p.id)),
-      h('div', { class: 'keep' }, 'Let go to hide')
+      p.spy && h('div', { class: 'badge' }, '🕵️ You are the spy'),
+      box,
+      h('div', { class: 'keep' },
+        p.spy ? 'Everyone else has a different word. Blend in.' : 'Let go to hide')
     )
     document.body.append(overlay)
+    fitWord(box, word, { min: 26, max: 96, fill: 0.96 })
     sfx('reveal'); haptic('reveal')
     return () => overlay.remove()
   }
@@ -188,7 +196,7 @@ function playScreen(root, show, game) {
         holdMs: HOLD_MS,
         onProgress: (v) => { charge.style.transform = `scaleX(${v})` },
         onComplete: () => {
-          const hide = peekWord(p)
+          const hide = peekWord(p, hold)
           endPeek = () => {
             endPeek = null
             hide()
@@ -296,10 +304,11 @@ function revealScreen(root, show, game) {
     h('div', { class: 'setup' },
       h('div', { class: 'setup-body uc-reveal', style: { justifyContent: 'center' } },
         h('div', { class: 'emoji' }, game.caught ? '🎯' : '🕵️'),
-        h('p', {}, h('strong', {}, spyOf(game).name), game.caught ? ' was the spy — caught!' : ' was the spy'),
+        h('div', { class: 'big spy-name' }, spyOf(game).name),
+        h('p', { class: 'dim' }, game.caught ? 'was the spy — caught!' : 'was the spy'),
         h('div', { class: 'uc-words' },
           h('div', {}, h('div', { class: 'label' }, 'Civilians'), h('div', { class: 'w' }, game.civilianWord)),
-          h('div', {}, h('div', { class: 'label' }, 'Spy'), h('div', { class: 'w' }, game.spyWord))
+          h('div', { class: 'spy' }, h('div', { class: 'label' }, '🕵️ Spy'), h('div', { class: 'w' }, game.spyWord))
         )
       ),
       h('div', { class: 'stack' },
