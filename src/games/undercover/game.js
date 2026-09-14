@@ -22,8 +22,9 @@ export function createGame({ names, pair, rng = Math.random }) {
     })),
     civilianWord: pair[0],
     spyWord: pair[1],
-    phase: 'reveal', // reveal -> play
+    phase: 'reveal', // reveal -> play -> over
     revealed: false,
+    caught: false,
   }
 }
 
@@ -43,6 +44,12 @@ export function eliminate(g, id) {
   const p = g.players[id]
   if (!p || !p.seen || p.out) return { kind: 'noop' }
   p.out = true
+  if (p.spy) {
+    g.caught = true
+    g.revealed = true
+    g.phase = 'over'
+    return { kind: 'spy' }
+  }
   return { kind: 'out' }
 }
 
@@ -50,10 +57,16 @@ export function revive(g, id) {
   const p = g.players[id]
   if (!p || !p.out) return { kind: 'noop' }
   p.out = false
+  if (p.spy) {
+    g.caught = false
+    g.revealed = false
+    g.phase = 'play'
+  }
   return { kind: 'back' }
 }
 
 export function revealWords(g) {
   g.revealed = true
+  g.phase = 'over'
   return g
 }

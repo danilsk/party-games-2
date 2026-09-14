@@ -54,6 +54,9 @@ function setupScreen(root, show) {
           h('input', {
             class: 'field', type: 'text', value: n, maxlength: '18',
             'aria-label': `Player ${i + 1} name`,
+            onfocus: (e) => { // iOS ignores select() during the focus event itself
+              if (/^Player \d+$/.test(e.target.value)) setTimeout(() => e.target.select(), 0)
+            },
             oninput: (e) => { names[i] = e.target.value; lsSet('uc:names', names) },
           })
         )
@@ -127,8 +130,8 @@ function howToPlay() {
       h('p', {}, 'Everyone gets the same secret word — except one ', h('strong', {}, 'spy'), ', who gets a different but similar word.'),
       h('p', {}, h('strong', {}, '1. '), 'Pass the phone around. Hold your own name to read your word privately — you can do this again any time you forget it.'),
       h('p', {}, h('strong', {}, '2. '), 'Take turns describing your word with a single clue. Never say the word itself.'),
-      h('p', {}, h('strong', {}, '3. '), 'Talk it over, then use the 🔫 button to knock out whoever seems off.'),
-      h('p', {}, h('strong', {}, '4. '), 'When the spy owns up and guesses, tap ', h('strong', {}, 'Show the words'), ' to see both.')
+      h('p', {}, h('strong', {}, '3. '), 'Talk it over, then use the 🔫 button to knock out whoever seems off — the app says whether you got the spy, and the round ends if you did.'),
+      h('p', {}, h('strong', {}, '4. '), 'If the spy owns up and guesses instead, tap ', h('strong', {}, 'Spy comes forward'), ' to see both words.')
     )
   )
 }
@@ -217,9 +220,11 @@ function playScreen(root, show, game) {
           class: 'btn btn-danger btn-block',
           onclick: () => {
             close()
-            eliminate(game, p.id)
+            const res = eliminate(game, p.id)
+            if (res.kind === 'spy') return show(revealScreen, game)  // announces the catch
             sfx('skip'); haptic('skip')
             draw()
+            toast(`${p.name} was not the spy`)
           },
         }, `Knock out ${p.name}`),
         h('button', { class: 'btn btn-ghost btn-block', onclick: close }, 'Cancel')
@@ -229,9 +234,9 @@ function playScreen(root, show, game) {
   const revealBtn = h('button', {
     class: 'btn btn-primary btn-lg btn-block',
     onclick: () => {
-      sheet('Show the words?', (close) =>
+      sheet('Spy comes forward?', (close) =>
         h('div', { class: 'stack' },
-          h('p', { class: 'tiny dim' }, 'This ends the round and shows everyone both words.'),
+          h('p', { class: 'tiny dim' }, 'Use this when the spy owns up. It ends the round and shows everyone both words.'),
           h('button', {
             class: 'btn btn-primary btn-block',
             onclick: () => { close(); revealWords(game); show(revealScreen, game) },
@@ -239,7 +244,7 @@ function playScreen(root, show, game) {
           h('button', { class: 'btn btn-ghost btn-block', onclick: close }, 'Cancel')
         ))
     },
-  }, '👁  Show the words')
+  }, '🙋  Spy comes forward')
 
   const screen = h('div', { class: 'screen' },
     h('div', { class: 'topbar' },
@@ -276,8 +281,8 @@ function revealScreen(root, show, game) {
     ),
     h('div', { class: 'setup' },
       h('div', { class: 'setup-body uc-reveal', style: { justifyContent: 'center' } },
-        h('div', { class: 'emoji' }, '🕵️'),
-        h('p', {}, h('strong', {}, spyOf(game).name), ' was the spy'),
+        h('div', { class: 'emoji' }, game.caught ? '🎯' : '🕵️'),
+        h('p', {}, h('strong', {}, spyOf(game).name), game.caught ? ' was the spy — caught!' : ' was the spy'),
         h('div', { class: 'uc-words' },
           h('div', {}, h('div', { class: 'label' }, 'Civilians'), h('div', { class: 'w' }, game.civilianWord)),
           h('div', {}, h('div', { class: 'label' }, 'Spy'), h('div', { class: 'w' }, game.spyWord))

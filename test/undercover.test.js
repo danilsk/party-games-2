@@ -65,13 +65,29 @@ test('a player cannot be knocked out before they have read their word', () => {
   assert.equal(g.players[0].out, true)
 })
 
-test('knocking out the spy is not announced by the rules', () => {
+test('knocking out the spy ends the round; knocking out a civilian does not', () => {
   const g = mk(5, 2)
   seeAll(g)
-  const res = eliminate(g, spyOf(g).id)
-  assert.equal(res.kind, 'out')
+  const civilian = g.players.find((p) => !p.spy)
+  assert.equal(eliminate(g, civilian.id).kind, 'out')
   assert.equal(g.phase, 'play')
   assert.equal(g.revealed, false)
+  assert.equal(g.caught, false)
+
+  assert.equal(eliminate(g, spyOf(g).id).kind, 'spy')
+  assert.equal(g.phase, 'over')
+  assert.equal(g.revealed, true)
+  assert.equal(g.caught, true)
+})
+
+test('bringing the spy back resumes the round', () => {
+  const g = mk(5, 2)
+  seeAll(g)
+  eliminate(g, spyOf(g).id)
+  assert.equal(revive(g, spyOf(g).id).kind, 'back')
+  assert.equal(g.phase, 'play')
+  assert.equal(g.revealed, false)
+  assert.equal(g.caught, false)
 })
 
 test('knocking out is idempotent and reversible', () => {
@@ -85,11 +101,13 @@ test('knocking out is idempotent and reversible', () => {
   assert.equal(revive(g, 1).kind, 'noop')
 })
 
-test('revealing the words only flips a flag', () => {
+test('revealing the words ends the round without a catch', () => {
   const g = mk(5)
   seeAll(g)
   revealWords(g)
   assert.equal(g.revealed, true)
+  assert.equal(g.phase, 'over')
+  assert.equal(g.caught, false)
   assert.equal(g.civilianWord, 'Sea')
   assert.equal(g.spyWord, 'Lake')
 })
