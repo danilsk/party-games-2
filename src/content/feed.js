@@ -145,7 +145,8 @@ export class ContentFeed {
           ? await generatePairs({ ...opts, count: BATCH_PAIRS })
           : await generateWords({ ...opts, count: BATCH_WORDS })
       const added = await this._append(fresh, key)
-      if (added < 0) return
+      // Config changed mid-flight: this batch belongs to nobody, and 'loading' would stick.
+      if (added < 0) return this._fill(this.key)
       if (!added) {
         this._setStatus({
           state: 'error',

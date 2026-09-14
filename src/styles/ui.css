@@ -163,6 +163,9 @@
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Shared: charades and undercover reveal words too, and CSS is split per game. */
+@keyframes word-in { from { opacity: 0; transform: scale(0.82) translateY(10px); } }
+
 .banner {
   display: flex; gap: var(--sp-3); align-items: flex-start;
   padding: var(--sp-3) var(--sp-4);

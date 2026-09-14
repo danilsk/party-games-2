@@ -5,7 +5,7 @@ import { sfx, unlockAudio } from '../../core/audio.js'
 import { haptic } from '../../core/haptics.js'
 import { keepAwake } from '../../core/wakelock.js'
 import { wordFeed, feedConfigFromSettings } from '../../content/feed.js'
-import { contentSetup, feedStatusLine, muteButton, startButton, noKeyBanner } from '../../ui/content-setup.js'
+import { contentSetup, feedStatusLine, muteButton, startButton, noKeyBanner, onCredentialsChange } from '../../ui/content-setup.js'
 import { fitWord } from '../headsup/fit.js'
 import './charades.css'
 
@@ -24,9 +24,12 @@ export function mount(root, ctx) {
 
 function setupScreen(root, show) {
   clear(root)
+  let live = true
   const status = h('div', {})
   const sync = async () => {
     await wordFeed.configure(feedConfigFromSettings(settings.all, activeLanguage(), activeTopic()))
+    if (!live) return
+    status.firstChild?.dispose?.()
     clear(status).append(feedStatusLine(wordFeed))
     wordFeed.prime()
   }
@@ -37,6 +40,7 @@ function setupScreen(root, show) {
     btn.disabled = true
     btn.textContent = 'Getting words…'
     await wordFeed.prime()
+    if (!live) return
     btn.disabled = false
     btn.textContent = '▶︎  Start'
     if (!wordFeed.size) return toast(wordFeed.status.error?.message || 'Could not get any words', { bad: true })
@@ -57,7 +61,10 @@ function setupScreen(root, show) {
   )
   root.append(screen)
   sync()
+  const offCreds = onCredentialsChange(sync)
   return () => {
+    live = false
+    offCreds()
     status.firstChild?.dispose?.()
     startBtn.dispose?.()
     banner.dispose?.()
@@ -79,6 +86,7 @@ function playScreen(root, show) {
   clear(root)
   keepAwake(true)
 
+  let live = true
   const state = { word: null, shown: 0, revealed: false }
   let hideTimer = 0
 
@@ -131,6 +139,7 @@ function playScreen(root, show) {
       clear(card).append(loadingView, peekBar)
       nextBtn.disabled = true
       w = await wordFeed.takeAsync()
+      if (!live) return
       nextBtn.disabled = false
       clear(card).append(hiddenView, peekBar)
       if (!w) return toast(wordFeed.status.error?.message || 'No words left', { bad: true })
@@ -210,6 +219,7 @@ function playScreen(root, show) {
   function onResize() { if (state.revealed) fitWord(card, wordEl, { max: 58, fill: 0.94 }) }
 
   return () => {
+    live = false
     clearTimeout(hideTimer)
     release()
     disposeHold()

@@ -33,7 +33,6 @@
   text-wrap: balance;
   animation: word-in 0.3s var(--pop) both;
 }
-@keyframes word-in { from { opacity: 0; transform: scale(0.82) translateY(10px); } }
 
 .hu-top { display: flex; align-items: center; gap: 14px; flex: none; }
 .hu-timer-bar {

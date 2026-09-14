@@ -19,8 +19,10 @@ export function route(pattern, handler) {
 export function navigate(path, { replace = false } = {}) {
   const target = `#${path}`
   if (location.hash === target) return resolve()
-  if (replace) history.replaceState(null, '', target)
-  else location.hash = path
+  if (!replace) return void (location.hash = path)
+  // replaceState fires no hashchange, so the new route has to be resolved by hand.
+  history.replaceState(null, '', target)
+  resolve()
 }
 
 export function back() {
@@ -35,9 +37,14 @@ export function resolve() {
     if (!m) continue
     const params = Object.fromEntries(r.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])]))
     current?.teardown?.()
-    current = { path }
+    const entry = { path }
+    current = entry
     const teardown = r.handler(params)
-    if (typeof teardown === 'function') current.teardown = teardown
+    // A handler may redirect, resolving a new route re-entrantly; that route keeps its own.
+    if (typeof teardown === 'function') {
+      if (current === entry) entry.teardown = teardown
+      else teardown()
+    }
     return
   }
   navigate('/', { replace: true })

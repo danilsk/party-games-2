@@ -5,7 +5,7 @@ import { sfx, unlockAudio } from '../../core/audio.js'
 import { haptic } from '../../core/haptics.js'
 import { keepAwake } from '../../core/wakelock.js'
 import { wordFeed, feedConfigFromSettings } from '../../content/feed.js'
-import { contentSetup, feedStatusLine, muteButton, startButton, noKeyBanner } from '../../ui/content-setup.js'
+import { contentSetup, feedStatusLine, muteButton, startButton, noKeyBanner, onCredentialsChange } from '../../ui/content-setup.js'
 import { TiltSensor, motionSupport, sensorHints } from './tilt-sensor.js'
 import { fitWord } from './fit.js'
 import './headsup.css'
@@ -46,11 +46,14 @@ export function mount(root, ctx) {
 
 function setupScreen(root, show, ctx) {
   clear(root)
+  let live = true
   const screen = h('div', { class: 'screen' })
   const status = h('div', {})
 
   const sync = async () => {
     await wordFeed.configure(feedConfigFromSettings(settings.all, activeLanguage(), activeTopic()))
+    if (!live) return
+    status.firstChild?.dispose?.()
     clear(status).append(feedStatusLine(wordFeed))
     wordFeed.prime()
   }
@@ -64,10 +67,12 @@ function setupScreen(root, show, ctx) {
     const sensor = new TiltSensor({ config: SENSITIVITY[settings.get('headsUpSensitivity')] })
     sensor.setInvert(settings.get('invertTilt'))
     const [res] = await Promise.all([sensor.start(), wordFeed.prime()])
+    if (!live) return sensor.stop()
     btn.disabled = false
     btn.textContent = '▶︎  Start round'
     if (!wordFeed.size) {
       sensor.stop()
+      exitFullscreen()
       return toast(wordFeed.status.error?.message || 'Could not get any words', { bad: true })
     }
     show((r, s, c) => roundScreen(r, s, c, { sensor, motion: res }))
@@ -87,7 +92,10 @@ function setupScreen(root, show, ctx) {
   )
   root.append(screen)
   sync()
+  const offCreds = onCredentialsChange(sync)
   return () => {
+    live = false
+    offCreds()
     status.firstChild?.dispose?.()
     startBtn.dispose?.()
     banner.dispose?.()
@@ -112,6 +120,17 @@ function howToPlay() {
 
 function roundScreen(root, show, ctx, { sensor, motion }) {
   clear(root)
+  let live = true
+  const timers = new Set()
+  // A deferred step that outlives the screen resurrects the round over whatever replaced it.
+  const later = (fn, ms) => {
+    const id = setTimeout(() => {
+      timers.delete(id)
+      if (live) fn()
+    }, ms)
+    timers.add(id)
+    return id
+  }
   const useMotion = motion.ok
   const total = settings.get('roundSeconds')
 
@@ -186,9 +205,10 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
   const nextWord = async () => {
     let w = wordFeed.take()
     if (!w) {
+      state.current = null
       word.textContent = '…'
       w = await wordFeed.takeAsync()
-      if (state.phase !== 'playing') return
+      if (!live || state.phase !== 'playing') return
       if (!w) {
         toast(wordFeed.status.error?.message || 'Ran out of words', { bad: true })
         return finish()
@@ -210,7 +230,7 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
   }
 
   const score = (correct) => {
-    if (state.phase !== 'playing') return
+    if (state.phase !== 'playing' || !state.current) return
     state.results.push({ word: state.current, correct })
     if (correct) {
       state.score++
@@ -263,7 +283,7 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
     keepAwake(false)
     sfx('end')
     haptic('end')
-    setTimeout(() => show((r, s, c) => resultsScreen(r, s, c, state)), 420)
+    later(() => show((r, s, c) => resultsScreen(r, s, c, state)), 420)
   }
 
   /* ------------------------------ arm + prep ------------------------------- */
@@ -330,19 +350,19 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
         haptic('tap')
         const el = h('div', { class: 'hu-countdown' }, String(n))
         clear(node).append(el)
-        setTimeout(step, 800)
+        later(step, 800)
       } else {
         sfx('go')
         haptic('start')
         clear(node).append(h('div', { class: 'hu-countdown' }, 'GO'))
-        setTimeout(() => {
+        later(() => {
           setOverlay(null)
           sensor.setMode('playing')
           startTimer()
         }, 620)
       }
     }
-    setTimeout(step, 800)
+    later(step, 800)
   }
 
   /* ------------------------------ sensor wiring ---------------------------- */
@@ -380,6 +400,7 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
       retry.disabled = true
       retry.textContent = 'Checking…'
       const res = await sensor.start()
+      if (!live) return
       if (res.ok) {
         show((r, s2, c) => roundScreen(r, s2, c, { sensor, motion: res }))
         return
@@ -419,6 +440,9 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
   applyRotation(null)
 
   return () => {
+    live = false
+    for (const id of timers) clearTimeout(id)
+    timers.clear()
     clearInterval(tick)
     sensor.stop()
     keepAwake(false)

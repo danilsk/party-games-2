@@ -5,7 +5,7 @@ import { sfx, unlockAudio } from '../../core/audio.js'
 import { haptic } from '../../core/haptics.js'
 import { keepAwake } from '../../core/wakelock.js'
 import { pairFeed, feedConfigFromSettings } from '../../content/feed.js'
-import { contentSetup, feedStatusLine, muteButton, startButton, noKeyBanner } from '../../ui/content-setup.js'
+import { contentSetup, feedStatusLine, muteButton, startButton, noKeyBanner, onCredentialsChange } from '../../ui/content-setup.js'
 import { lsGet, lsSet } from '../../core/storage.js'
 import {
   createGame, wordFor, alive, spyOf, markSeen, eliminate, revive, revealWords,
@@ -32,12 +32,15 @@ export function mount(root) {
 
 function setupScreen(root, show) {
   clear(root)
+  let live = true
   let names = lsGet('uc:names', defaultNames(4))
   if (!Array.isArray(names) || names.length < MIN_PLAYERS) names = defaultNames(4)
 
   const status = h('div', {})
   const sync = async () => {
     await pairFeed.configure(feedConfigFromSettings(settings.all, activeLanguage(), activeTopic()))
+    if (!live) return
+    status.firstChild?.dispose?.()
     clear(status).append(feedStatusLine(pairFeed))
     pairFeed.prime()
   }
@@ -83,6 +86,7 @@ function setupScreen(root, show) {
     btn.textContent = 'Getting a pair…'
     await pairFeed.prime()
     const pair = await pairFeed.takeAsync()
+    if (!live) return
     btn.disabled = false
     btn.textContent = '▶︎  Deal words'
     if (!pair) return toast(pairFeed.status.error?.message || 'Could not get a word pair', { bad: true })
@@ -117,7 +121,10 @@ function setupScreen(root, show) {
   )
   root.append(screen)
   sync()
+  const offCreds = onCredentialsChange(sync)
   return () => {
+    live = false
+    offCreds()
     status.firstChild?.dispose?.()
     startBtn.dispose?.()
     banner.dispose?.()

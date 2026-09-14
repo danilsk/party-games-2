@@ -171,6 +171,17 @@ export function contentSetup({ onChange, showFormat = true } = {}) {
   return wrap
 }
 
+/** Re-runs `fn` when the key or model changes, so a key added mid-screen takes effect. */
+export function onCredentialsChange(fn) {
+  let { apiKey, model } = settings.all
+  return settings.subscribe((s) => {
+    if (s.apiKey === apiKey && s.model === model) return
+    apiKey = s.apiKey
+    model = s.model
+    fn()
+  })
+}
+
 export function feedStatusLine(feed) {
   const el = h('div', { class: 'feed-status', role: 'status' })
   const paint = (status, size) => {

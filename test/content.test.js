@@ -143,12 +143,15 @@ test('a wholly repeated batch reports exhaustion, never blames the model wrongly
   assert.match(status.error.message, /repeat/i)
 })
 
-test('a config change mid-request discards the stale batch without an error', async () => {
+test('a config change mid-request drops the stale batch and refills for the new one', async () => {
   let release
   const gate = new Promise((r) => { release = r })
+  let call = 0
   globalThis.fetch = async () => {
-    await gate
-    return { ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify(words(30, 'stale')) } }] }) }
+    const n = ++call
+    if (n === 1) await gate
+    const body = JSON.stringify(words(30, n === 1 ? 'stale' : 'fresh'))
+    return { ok: true, json: async () => ({ choices: [{ message: { content: body } }] }) }
   }
   const feed = new ContentFeed('words')
   await feed.configure({ ...freshBase() })
@@ -156,7 +159,8 @@ test('a config change mid-request discards the stale batch without an error', as
   await feed.configure({ ...freshBase() })
   release()
   await inflight
-  assert.equal(feed.size, 0, 'stale batch must not land in the new topic')
+  assert.ok(feed.peekAll().every((w) => w.startsWith('fresh')), `stale batch landed: ${feed.peekAll()[0]}`)
+  assert.equal(feed.size, 30, 'the new config was left with nothing')
   assert.notEqual(feed.status.state, 'error', 'a stale bail is not a failure')
 })
 

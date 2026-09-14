@@ -111,8 +111,8 @@ alternating play at 650 ms per word.
 test/tilt-core.test.js      25 tests — state machine, calibration, sign detection, recovery
 test/tilt-envelope.test.js   5 tests — shake sweep, detection floor, latency, rapid play
 test/content.test.js        20 tests — history isolation, refills, dedup, errors, prompts
-test/undercover.test.js     17 tests — spy assignment, phases, win conditions
-test/e2e/run.mjs            38 checks — the built bundle under /party-games-2/, API mocked
+test/undercover.test.js     12 tests — spy assignment, phases, win conditions
+test/e2e/run.mjs            43 checks — the built bundle under /party-games-2/, API mocked
 test/e2e/live-generation.mjs         — opt-in, hits OpenRouter for real
 ```
 

@@ -185,6 +185,28 @@ await section('app shell', async () => {
     await page.goto(`${URL_}#/nope/nope`, { waitUntil: 'networkidle' })
     await page.waitForSelector('.game-card', { timeout: 5000 })
   })
+  await check('a cold load of an unknown route falls back to home', async () => {
+    for (const hash of ['#/nope', '#/g/not-a-game']) {
+      const p4 = await newPage()
+      await p4.goto(`${URL_}${hash}`, { waitUntil: 'networkidle' })
+      await p4.waitForSelector('.game-card', { timeout: 5000 })
+      assert((await p4.evaluate(() => location.hash)) === '#/', `hash stuck at ${hash}`)
+      await p4.__ctx.close()
+    }
+  })
+  await check('a key added from inside a game unblocks the start button', async () => {
+    const p5 = await newPage({ apiKey: false })
+    await mockApi(p5.__ctx)
+    await p5.goto(`${URL_}#/g/charades`, { waitUntil: 'networkidle' })
+    await p5.click('.setup .btn-primary')
+    await p5.waitForSelector('.sheet', { timeout: 3000 })
+    await p5.fill('input[aria-label="OpenRouter API key"]', 'sk-or-v1-late')
+    await p5.click('.sheet-backdrop')
+    await p5.waitForFunction(() => !/Needs an OpenRouter key/.test(document.querySelector('.feed-status')?.textContent || ''), { timeout: 8000 })
+    await p5.click('.setup .btn-primary')
+    await p5.waitForSelector('.ch-word', { timeout: 8000 })
+    await p5.__ctx.close()
+  })
   await page.__ctx.close()
 })
 
@@ -288,7 +310,11 @@ await section('undercover', async () => {
     assert((await holdReveal(0)) === words[0], 're-reading gave a different word')
   })
   await check('knocking a player out runs the confirm flow and is reversible', async () => {
-    await page.click('.uc-player .kill >> nth=0')
+    // Knocking out the spy would correctly end the round, so pick a known civilian.
+    const counts = {}
+    for (const w of words) counts[w] = (counts[w] || 0) + 1
+    const civilian = words.findIndex((w) => counts[w] > 1)
+    await page.click(`.uc-player .kill >> nth=${civilian}`)
     await page.waitForSelector('.sheet', { timeout: 3000 })
     await page.click('.sheet .btn-danger')
     await page.waitForSelector('.uc-player.out', { timeout: 3000 })
@@ -297,7 +323,7 @@ await section('undercover', async () => {
     assert(!(await page.$('.uc-player.out')), 'player was not brought back')
   })
   await check('showing the words ends the round without declaring a winner', async () => {
-    await page.click('text=Show the words')
+    await page.click('text=Spy comes forward')
     await page.waitForSelector('.sheet', { timeout: 3000 })
     await page.click('text=Show them')
     await page.waitForSelector('.uc-reveal', { timeout: 4000 })
@@ -419,6 +445,37 @@ await section('headsup motion', async () => {
   })
   await check('heads up produced no errors', async () => {
     assert(page.__errors.length === 0, page.__errors.join('; '))
+  })
+  await page.__ctx.close()
+})
+
+/* ------------------- heads up: leaving mid-countdown ---------------------- */
+await section('headsup teardown', async () => {
+  const page = await newPage()
+  await page.goto(URL_, { waitUntil: 'networkidle' })
+  await page.click('.game-card[data-game="headsup"]')
+  await page.click('text=Start round')
+
+  await check('leaving while the round is getting ready does not hijack the screen', async () => {
+    await page.click('.topbar .icon-btn[aria-label="Back"]')
+    await page.waitForSelector('.game-card', { timeout: 5000 })
+    await sleep(4000)
+    assert(!(await page.$('.hu-stage')), 'the round surface took over the home screen')
+    assert((await page.$$('.game-card')).length === 3, 'home screen was replaced')
+  })
+
+  await check('an abandoned countdown does not run a hidden round', async () => {
+    await page.click('.game-card[data-game="headsup"]')
+    await page.click('text=Start round')
+    await page.waitForSelector('text=Play with buttons', { timeout: 10000 })
+    await page.click('text=Play with buttons')
+    await page.waitForSelector('.hu-countdown', { timeout: 4000 })
+    await page.evaluate(() => { location.hash = '#/' })
+    await page.waitForSelector('.game-card', { timeout: 5000 })
+    await sleep(6000)
+    assert(!(await page.$('.hu-clock')), 'a hidden round kept running')
+    assert(!(await page.$('.big-score')), 'results took over the home screen')
+    assert((await page.$$('.game-card')).length === 3, 'home screen was replaced')
   })
   await page.__ctx.close()
 })
