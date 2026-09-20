@@ -417,3 +417,72 @@ test('idle mode reports state but never fires gestures', () => {
   assert.equal(tilts(evs).length, 0)
   assert.ok(proc.snapshot().calibrated)
 })
+
+test('invert flips the reported direction even when orientation events fire', () => {
+  const proc = new TiltProcessor({ invert: true })
+  feed(proc, simulate({ duration: 1200, pitchAt: () => NEUTRAL }))
+  proc.setMode('playing')
+  const evs = feed(
+    proc,
+    simulate({
+      duration: 2000,
+      t0: 1200,
+      pitchAt: tiltProfile({ base: NEUTRAL, peak: -60, startMs: 1500 }),
+    })
+  )
+  const d = tilts(evs)
+  assert.equal(d.length, 1)
+  assert.equal(d[0].dir, 'up')
+})
+
+test('gyro comes back after being switched off', () => {
+  const proc = ready()
+  proc.gyroGain = 0
+  feed(proc, simulate({ duration: 3000, t0: 1200, pitchAt: (t) => NEUTRAL + 10 * Math.sin(t / 250) }))
+  assert.equal(proc.gyroGain, 1)
+})
+
+test('a lock left over from arming is dropped when play starts level', () => {
+  const proc = new TiltProcessor()
+  feed(proc, simulate({ duration: 1200, pitchAt: () => NEUTRAL }))
+  proc.setMode('arming')
+  // The game switches to idle the moment the arm fires, as onEvent does.
+  let armed = 0
+  for (const smp of simulate({
+    duration: 2200,
+    t0: 1200,
+    pitchAt: tiltProfile({ base: NEUTRAL, peak: -55, startMs: 1500, holdMs: 500 }),
+  })) {
+    proc.updateOrientation(smp.beta, smp.gamma, smp.t)
+    for (const e of proc.update(smp)) if (e.type === 'armed') { armed++; proc.setMode('idle') }
+  }
+  assert.equal(armed, 1)
+  assert.equal(proc.lockDir, 'down', 'lock survives idle')
+  feed(proc, simulate({ duration: 3000, t0: 3400, pitchAt: () => NEUTRAL }))
+  proc.setMode('playing')
+  assert.equal(proc.lockDir, null)
+  const evs = feed(
+    proc,
+    simulate({
+      duration: 1200,
+      t0: 6400,
+      pitchAt: tiltProfile({ base: NEUTRAL, peak: -60, startMs: 6550 }),
+    })
+  )
+  assert.equal(tilts(evs).length, 1, 'first tilt of the round counts')
+  assert.ok(tilts(evs)[0].t < 6800, `fired late at ${tilts(evs)[0].t}`)
+})
+
+test('a lock held through the countdown does not re-zero neutral at GO', () => {
+  const proc = new TiltProcessor()
+  feed(proc, simulate({ duration: 1200, pitchAt: () => NEUTRAL }))
+  proc.setMode('arming')
+  feed(proc, simulate({ duration: 1500, t0: 1200, pitchAt: sequence([[1500, NEUTRAL], [2700, -40]]) }))
+  assert.equal(proc.lockDir, 'down')
+  proc.setMode('idle')
+  feed(proc, simulate({ duration: 3200, t0: 2700, pitchAt: () => -40 }))
+  proc.setMode('playing')
+  const evs = feed(proc, simulate({ duration: 1000, t0: 5900, pitchAt: () => -40 }))
+  assert.equal(evs.filter((e) => e.type === 'recalibrated').length, 0)
+  assert.ok(Math.abs(proc.neutral - NEUTRAL) < 4, `neutral ${proc.neutral}`)
+})

@@ -1,7 +1,7 @@
 import { h, clear, toast } from '../../ui/dom.js'
 import { back, navigate, interceptBack } from '../../core/router.js'
 import { settings, activeTopic, activeLanguage } from '../../core/settings.js'
-import { sfx, unlockAudio } from '../../core/audio.js'
+import { sfx, say, hush, unlockAudio } from '../../core/audio.js'
 import { haptic } from '../../core/haptics.js'
 import { keepAwake } from '../../core/wakelock.js'
 import { wordFeed, feedConfigFromSettings } from '../../content/feed.js'
@@ -118,6 +118,7 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
   }
   const useMotion = motion.ok
   const total = settings.get('roundSeconds')
+  let handoff = false
 
   const word = h('span', {})
   const clock = h('div', { class: 'hu-clock' }, String(total))
@@ -293,9 +294,18 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
   const prep = prepOverlay()
   setOverlay(prep)
 
+  // The phone is on the player's forehead, so state changes must be audible.
+  let cueKey = ''
+  const cue = (key, text) => {
+    if (key === cueKey) return
+    cueKey = key
+    say(text, { delay: 350 })
+  }
+
   const paintPrep = (snap) => {
     if (state.phase !== 'prep') return
     if (!snap.landscape) {
+      cue('rotate', 'Turn the phone sideways')
       prep.els.face.textContent = '📱'
       prep.els.face.classList.add('rotate-hint')
       prep.els.title.textContent = 'Turn the phone sideways'
@@ -305,12 +315,14 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
     }
     prep.els.face.classList.remove('rotate-hint')
     if (!snap.calibrated) {
+      cue('still', 'Hold still')
       prep.els.face.textContent = '🤚'
       prep.els.title.textContent = 'Hold still for a second'
       prep.els.body.textContent = 'Getting a reading on how you are holding it.'
       prep.els.ring.style.strokeDashoffset = '276.5'
       return
     }
+    cue('tilt', 'Tilt forward to start')
     prep.els.face.textContent = '🙈'
     prep.els.title.textContent = 'Tilt forward to start'
     prep.els.body.textContent = 'Tip the top of the phone down and hold until the ring fills.'
@@ -321,6 +333,7 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
     if (state.phase !== 'prep') return
     state.phase = 'countdown'
     sensor.setMode('idle')
+    hush()
     sfx('arm')
     haptic('start')
     let n = 3
@@ -359,7 +372,10 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
       } else if (e.type === 'orientation' && !e.landscape && state.phase === 'playing') {
         badOrientation()
       } else if (e.type === 'orientation' && e.landscape && state.phase === 'playing') {
+        holdStill()
+      } else if (e.type === 'calibrated' && state.phase === 'playing') {
         setOverlay(null)
+        sfx('go')
       }
     }
     sensor.onFrame = (snap) => {
@@ -385,6 +401,7 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
       const res = await sensor.start()
       if (!live) return
       if (res.ok) {
+        handoff = true
         show((r, s2, c) => roundScreen(r, s2, c, { sensor, motion: res }))
         return
       }
@@ -395,6 +412,7 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
     // The shield or permission can be changed without reloading, so listen for a late start.
     sensor.onLate = () => {
       toast('Motion sensors are working now')
+      handoff = true
       show((r, s2, c) => roundScreen(r, s2, c, { sensor, motion: { ok: true } }))
     }
     prep.append(
@@ -410,10 +428,20 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
   }
 
   const badOrientation = () => {
+    say('Turn the phone sideways', { delay: 200 })
     setOverlay(h('div', { class: 'hu-overlay' },
       h('div', { class: 'big-emoji rotate-hint' }, '📱'),
       h('h2', {}, 'Keep it horizontal'),
       h('p', {}, 'Turn the phone back sideways to carry on. The clock is still running!')
+    ))
+  }
+
+  const holdStill = () => {
+    say('Hold still')
+    setOverlay(h('div', { class: 'hu-overlay' },
+      h('div', { class: 'big-emoji' }, '🤚'),
+      h('h2', {}, 'Hold still'),
+      h('p', {}, 'Getting a new reading. The clock is still running!')
     ))
   }
 
@@ -429,7 +457,8 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
     for (const id of timers) clearTimeout(id)
     timers.clear()
     clearInterval(tick)
-    sensor.stop()
+    hush()
+    if (!handoff) sensor.stop()
     keepAwake(false)
     window.removeEventListener('resize', onResize)
     window.removeEventListener('orientationchange', onResize)

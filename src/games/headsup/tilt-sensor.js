@@ -37,15 +37,13 @@ export class TiltSensor {
     this.samples = 0
     this.lastSampleAt = 0
     this.hasGyro = false
-    this.invert = 0
     this.proc.setAccelSignPrior(isIOS() ? -1 : 1)
     this._motion = this._motion.bind(this)
     this._orient = this._orient.bind(this)
   }
 
   setInvert(invert) {
-    this.invert = invert ? 1 : 0
-    this.proc.requestRecalibration()
+    this.proc.setInvert(invert)
   }
 
   setMode(mode) {
@@ -60,18 +58,17 @@ export class TiltSensor {
     const { hasMotion, needsPermission } = motionSupport()
     if (!hasMotion) return { ok: false, reason: 'unsupported' }
     if (needsPermission) {
+      // Both prompts must be issued inside the user gesture, so fire them together.
+      const motion = window.DeviceMotionEvent.requestPermission()
+      const orient =
+        typeof window.DeviceOrientationEvent?.requestPermission === 'function'
+          ? window.DeviceOrientationEvent.requestPermission().catch(() => 'denied')
+          : Promise.resolve('denied')
       try {
-        const res = await window.DeviceMotionEvent.requestPermission()
+        const [res] = await Promise.all([motion, orient])
         if (res !== 'granted') return { ok: false, reason: 'denied' }
       } catch (e) {
         return { ok: false, reason: 'denied' }
-      }
-      if (typeof window.DeviceOrientationEvent?.requestPermission === 'function') {
-        try {
-          await window.DeviceOrientationEvent.requestPermission()
-        } catch (e) {
-          /* orientation is only a sign cross-check; motion alone is enough */
-        }
       }
     }
     window.addEventListener('devicemotion', this._motion, { passive: true })
@@ -129,12 +126,11 @@ export class TiltSensor {
       this.onLate()
     }
     const r = e.rotationRate
-    const s = this.invert ? -1 : 1
     const events = this.proc.update({
       t: performance.now(),
-      ax: a.x * s,
-      ay: a.y * s,
-      az: a.z * s,
+      ax: a.x,
+      ay: a.y,
+      az: a.z,
       rx: r ? r.beta : undefined,
       ry: r ? r.gamma : undefined,
       rz: r ? r.alpha : undefined,

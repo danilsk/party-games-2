@@ -29,6 +29,7 @@ export const DEFAULT_CONFIG = {
   baseAlpha: 0.09,
   noGyroAlpha: 0.16,
   accelTrustK: 6,
+  invert: false,
 }
 
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v)
@@ -103,7 +104,20 @@ export class TiltProcessor {
     this.mode = mode
     this.candidate = null
     this.armProgress = 0
-    if (mode !== 'idle') this.cooldownUntil = Math.max(this.cooldownUntil, (this.lastT ?? 0) + 150)
+    const t = this.lastT ?? 0
+    if (mode !== 'idle') this.cooldownUntil = Math.max(this.cooldownUntil, t + 150)
+    if (this.lockDir) {
+      if (Math.abs(this.rel) <= this.cfg.releaseDeg) this.lockDir = null
+      else this.lockSince = t
+      this.returnSince = null
+    }
+  }
+
+  setInvert(invert) {
+    invert = !!invert
+    if (invert === this.cfg.invert) return
+    this.cfg.invert = invert
+    this.requestRecalibration()
   }
 
   setAccelSignPrior(sign) {
@@ -155,15 +169,17 @@ export class TiltProcessor {
 
     const prev = this.g
     let pred = prev
-    if (hasRot && this.sawRotation && this.gyroGain !== 0) {
-      const wx = s.rx * DEG * this.gyroGain
-      const wy = s.ry * DEG * this.gyroGain
-      const wz = s.rz * DEG * this.gyroGain
+    if (hasRot && this.sawRotation) {
+      const gain = this.gyroGain || 1
+      const wx = s.rx * DEG * gain
+      const wy = s.ry * DEG * gain
+      const wz = s.rz * DEG * gain
       const cx = wy * prev.z - wz * prev.y
       const cy = wz * prev.x - wx * prev.z
       const cz = wx * prev.y - wy * prev.x
-      pred = norm({ x: prev.x - cx * dt, y: prev.y - cy * dt, z: prev.z - cz * dt })
-      this._scoreGyro(prev, pred, aHat)
+      const probe = norm({ x: prev.x - cx * dt, y: prev.y - cy * dt, z: prev.z - cz * dt })
+      if (this.linearAvg < cfg.maxLinearG) this._scoreGyro(prev, probe, aHat)
+      if (this.gyroGain !== 0) pred = probe
     }
 
     const accelErr = Math.abs(rawMag - G) / G
@@ -184,7 +200,7 @@ export class TiltProcessor {
     this.linear = Math.hypot(lin.x, lin.y, lin.z) / G
     this.linearAvg += (this.linear - this.linearAvg) * (1 - Math.exp(-dt / cfg.linearTau))
 
-    this.pitch = Math.asin(clamp(this.g.z, -1, 1)) * RAD
+    this.pitch = Math.asin(clamp(this.g.z, -1, 1)) * RAD * (cfg.invert ? -1 : 1)
     const inPlane = Math.hypot(this.g.x, this.g.y)
     this.rollDev =
       inPlane < cfg.minInPlane ? null : Math.atan2(Math.abs(this.g.y), Math.abs(this.g.x)) * RAD
@@ -245,7 +261,9 @@ export class TiltProcessor {
     this.gyroSamples++
     if (this.gyroSamples >= 40) {
       const c = this.gyroScore / this.gyroSamples
-      if (c < -0.35) this.gyroGain = -this.gyroGain
+      const gain = this.gyroGain || 1
+      if (c < -0.35) this.gyroGain = -gain
+      else if (c > 0.35) this.gyroGain = gain
       else if (c < 0.05) this.gyroGain = 0
       this.gyroScore = 0
       this.gyroSamples = 0

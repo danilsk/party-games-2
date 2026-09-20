@@ -98,6 +98,38 @@ const SOUNDS = {
   },
 }
 
+let sayTimer = 0
+
+/** Speak a short cue; a new cue replaces any pending or in-progress one. */
+export function say(text, { delay = 0 } = {}) {
+  clearTimeout(sayTimer)
+  const synth = window.speechSynthesis
+  if (!synth) return
+  const run = () => {
+    if (!settings.get('sound')) return
+    try {
+      synth.cancel()
+      const u = new SpeechSynthesisUtterance(text)
+      u.lang = 'en-US'
+      u.rate = 1.05
+      synth.speak(u)
+    } catch (e) {
+      /* speech is decorative; never break gameplay */
+    }
+  }
+  if (delay) sayTimer = setTimeout(run, delay)
+  else run()
+}
+
+export function hush() {
+  clearTimeout(sayTimer)
+  try {
+    window.speechSynthesis?.cancel()
+  } catch (e) {
+    /* nothing to stop */
+  }
+}
+
 export function sfx(name) {
   if (!settings.get('sound')) return
   const fn = SOUNDS[name]
