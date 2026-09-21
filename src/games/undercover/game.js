@@ -7,7 +7,7 @@ export function defaultNames(n) {
   return Array.from({ length: n }, (_, i) => `Player ${i + 1}`)
 }
 
-export function createGame({ names, pair, rng = Math.random }) {
+export function createGame({ names, pair, rng = Math.random, blindSpy = false }) {
   if (!Array.isArray(names) || names.length < MIN_PLAYERS)
     throw new Error(`Undercover needs at least ${MIN_PLAYERS} players`)
   if (!pair || pair.length !== 2) throw new Error('A word pair is required')
@@ -22,6 +22,7 @@ export function createGame({ names, pair, rng = Math.random }) {
     })),
     civilianWord: pair[0],
     spyWord: pair[1],
+    blindSpy: !!blindSpy,
     phase: 'reveal', // reveal -> play -> over
     revealed: false,
     caught: false,
@@ -29,6 +30,13 @@ export function createGame({ names, pair, rng = Math.random }) {
 }
 
 export const wordFor = (g, id) => (g.players[id].spy ? g.spyWord : g.civilianWord)
+
+/** Everything a peek screen is allowed to show. With a blind spy, `spy` is never true. */
+export const secretFor = (g, id) => ({
+  word: wordFor(g, id),
+  spy: g.players[id].spy && !g.blindSpy,
+})
+
 export const alive = (g) => g.players.filter((p) => !p.out)
 export const spyOf = (g) => g.players.find((p) => p.spy)
 export const allSeen = (g) => g.players.every((p) => p.seen)

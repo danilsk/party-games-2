@@ -1,4 +1,4 @@
-import { h, clear, toast, sheet, holdable } from '../../ui/dom.js'
+import { h, clear, toast, sheet, holdable, switchRow } from '../../ui/dom.js'
 import { back, navigate, interceptBack } from '../../core/router.js'
 import { settings, activeTopic, activeLanguage } from '../../core/settings.js'
 import { sfx, unlockAudio } from '../../core/audio.js'
@@ -9,7 +9,7 @@ import { contentSetup, feedStatusLine, muteButton, startButton, noKeyBanner, onC
 import { lsGet, lsSet } from '../../core/storage.js'
 import { fitWord } from '../headsup/fit.js'
 import {
-  createGame, wordFor, alive, spyOf, markSeen, eliminate, revive, revealWords,
+  createGame, secretFor, alive, spyOf, markSeen, eliminate, revive, revealWords,
   defaultNames, MIN_PLAYERS, MAX_PLAYERS,
 } from './game.js'
 import './undercover.css'
@@ -36,6 +36,7 @@ function setupScreen(root, show) {
   let live = true
   let names = lsGet('uc:names', defaultNames(4))
   if (!Array.isArray(names) || names.length < MIN_PLAYERS) names = defaultNames(4)
+  let blindSpy = lsGet('uc:blind', false) === true
 
   const status = h('div', {})
   const sync = async () => {
@@ -92,7 +93,7 @@ function setupScreen(root, show) {
     btn.textContent = '▶︎  Deal words'
     if (!pair) return toast(pairFeed.status.error?.message || 'Could not get a word pair', { bad: true })
     try {
-      show(playScreen, createGame({ names, pair }))
+      show(playScreen, createGame({ names, pair, blindSpy }))
     } catch (e) {
       toast(e.message, { bad: true })
     }
@@ -104,7 +105,7 @@ function setupScreen(root, show) {
       h('button', { class: 'icon-btn', 'aria-label': 'Back', onclick: goBack }, '‹'),
       h('h2', {}, '🕵️ Undercover'),
       muteButton(),
-      h('button', { class: 'icon-btn', 'aria-label': 'How to play', onclick: howToPlay }, '?')
+      h('button', { class: 'icon-btn', 'aria-label': 'How to play', onclick: () => howToPlay(blindSpy) }, '?')
     ),
     h('div', { class: 'setup' },
       h('div', { class: 'setup-body' },
@@ -116,6 +117,12 @@ function setupScreen(root, show) {
             h('button', { 'aria-label': 'More players', onclick: () => setCount(names.length + 1) }, '+')
           )),
         nameList,
+        h('div', { class: 'uc-mode' },
+          switchRow('Spy flies blind', blindSpy, (v) => {
+            blindSpy = v
+            lsSet('uc:blind', v)
+            sfx('tap'); haptic()
+          }, 'Nobody is told they are the spy. The odd one out has to work it out from what everyone else says.')),
         contentSetup({ onChange: sync, showFormat: false })
       ),
       h('div', { class: 'stack' }, banner, status, startBtn)
@@ -135,14 +142,18 @@ function setupScreen(root, show) {
   }
 }
 
-function howToPlay() {
+function howToPlay(blind) {
   sheet('How to play', () =>
     h('div', { class: 'stack tiny' },
-      h('p', {}, 'Everyone gets the same secret word — except one ', h('strong', {}, 'spy'), ', who gets a different but similar word.'),
+      blind
+        ? h('p', {}, 'Everyone gets the same secret word — except one ', h('strong', {}, 'spy'), ', who gets a different but similar one. Every screen looks the same, so nobody knows which of you it is, not even the spy.')
+        : h('p', {}, 'Everyone gets the same secret word — except one ', h('strong', {}, 'spy'), ', who gets a different but similar word.'),
       h('p', {}, h('strong', {}, '1. '), 'Pass the phone around. Hold your own name to read your word privately — you can do this again any time you forget it.'),
       h('p', {}, h('strong', {}, '2. '), 'Take turns describing your word with a single clue. Never say the word itself.'),
       h('p', {}, h('strong', {}, '3. '), 'Talk it over, then use the 🔫 button to knock out whoever seems off — the app says whether you got the spy, and the round ends if you did.'),
-      h('p', {}, h('strong', {}, '4. '), 'If the spy owns up and guesses instead, tap ', h('strong', {}, 'Spy comes forward'), ' to see both words.')
+      blind
+        ? h('p', {}, h('strong', {}, '4. '), 'Working out that you are the odd one is the spy win. Tap ', h('strong', {}, 'Show the words'), ' whenever you want to stop and compare.')
+        : h('p', {}, h('strong', {}, '4. '), 'If the spy owns up and guesses instead, tap ', h('strong', {}, 'Spy comes forward'), ' to see both words.')
     )
   )
 }
@@ -159,14 +170,15 @@ function playScreen(root, show, game) {
   const peekWord = (p, row) => {
     const r = row.getBoundingClientRect()
     const end = r.top + r.height / 2 < window.innerHeight / 2 ? 'at-bottom' : 'at-top'
-    const word = h('div', { class: 'word' }, wordFor(game, p.id))
+    const secret = secretFor(game, p.id)
+    const word = h('div', { class: 'word' }, secret.word)
     const box = h('div', { class: 'wordbox' }, word)
-    const overlay = h('div', { class: `uc-secret ${end}${p.spy ? ' spy' : ''}` },
+    const overlay = h('div', { class: `uc-secret ${end}${secret.spy ? ' spy' : ''}` },
       h('div', { class: 'who' }, p.name),
-      p.spy && h('div', { class: 'badge' }, '🕵️ You are the spy'),
+      secret.spy && h('div', { class: 'badge' }, '🕵️ You are the spy'),
       box,
       h('div', { class: 'keep' },
-        p.spy ? 'Everyone else has a different word. Blend in.' : 'Let go to hide')
+        secret.spy ? 'Everyone else has a different word. Blend in.' : 'Let go to hide')
     )
     document.body.append(overlay)
     fitWord(box, word, { min: 26, max: 96, fill: 0.96 })
@@ -252,9 +264,11 @@ function playScreen(root, show, game) {
   const revealBtn = h('button', {
     class: 'btn btn-primary btn-lg btn-block',
     onclick: () => {
-      sheet('Spy comes forward?', (close) =>
+      sheet(game.blindSpy ? 'Show the words?' : 'Spy comes forward?', (close) =>
         h('div', { class: 'stack' },
-          h('p', { class: 'tiny dim' }, 'Use this when the spy owns up. It ends the round and shows everyone both words.'),
+          h('p', { class: 'tiny dim' }, game.blindSpy
+            ? 'Use this when someone owns up, or when you all want to stop guessing. It ends the round and shows everyone both words.'
+            : 'Use this when the spy owns up. It ends the round and shows everyone both words.'),
           h('button', {
             class: 'btn btn-primary btn-block',
             onclick: () => { close(); revealWords(game); show(revealScreen, game) },
@@ -262,7 +276,7 @@ function playScreen(root, show, game) {
           h('button', { class: 'btn btn-ghost btn-block', onclick: close }, 'Cancel')
         ))
     },
-  }, '🙋  Spy comes forward')
+  }, game.blindSpy ? '🙋  Show the words' : '🙋  Spy comes forward')
 
   const goBack = () => show(setupScreen)
   const screen = h('div', { class: 'screen' },
@@ -270,7 +284,7 @@ function playScreen(root, show, game) {
       h('button', { class: 'icon-btn', 'aria-label': 'Back to setup', onclick: goBack }, '‹'),
       h('h2', {}, '🕵️ Undercover'),
       muteButton(),
-      h('button', { class: 'icon-btn', 'aria-label': 'How to play', onclick: howToPlay }, '?')
+      h('button', { class: 'icon-btn', 'aria-label': 'How to play', onclick: () => howToPlay(game.blindSpy) }, '?')
     ),
     h('div', { class: 'setup' },
       h('div', { class: 'setup-body' }, list, hint),
@@ -305,7 +319,9 @@ function revealScreen(root, show, game) {
       h('div', { class: 'setup-body uc-reveal', style: { justifyContent: 'center' } },
         h('div', { class: 'emoji' }, game.caught ? '🎯' : '🕵️'),
         h('div', { class: 'big spy-name' }, spyOf(game).name),
-        h('p', { class: 'dim' }, game.caught ? 'was the spy — caught!' : 'was the spy'),
+        h('p', { class: 'dim' }, game.caught
+          ? 'was the spy — caught!'
+          : game.blindSpy ? 'was the spy, and was never told' : 'was the spy'),
         h('div', { class: 'uc-words' },
           h('div', {}, h('div', { class: 'label' }, 'Civilians'), h('div', { class: 'w' }, game.civilianWord)),
           h('div', { class: 'spy' }, h('div', { class: 'label' }, '🕵️ Spy'), h('div', { class: 'w' }, game.spyWord))

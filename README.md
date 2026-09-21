@@ -9,7 +9,7 @@ framework, no backend.
 |---|---|
 | 🙈 **Heads Up** | Phone on your forehead, held horizontally. Tilt forward to score, back to skip. 2+ players. |
 | 🎭 **Charades** | The word flashes for two seconds, then hides. Press and hold to peek again. 2+ players. |
-| 🕵️ **Undercover** | Everyone gets the same word — except one spy, who gets a suspiciously similar one. 4+ players. |
+| 🕵️ **Undercover** | Everyone gets the same word — except one spy, who gets a suspiciously similar one. Optionally the spy is never told either. 4+ players. |
 
 Every word is written on demand by a model, so the app needs your own OpenRouter key. There
 is no bundled word list: nothing repeats, and any topic you can describe in a sentence
@@ -111,8 +111,8 @@ alternating play at 650 ms per word.
 test/tilt-core.test.js      25 tests — state machine, calibration, sign detection, recovery
 test/tilt-envelope.test.js   5 tests — shake sweep, detection floor, latency, rapid play
 test/content.test.js        20 tests — history isolation, refills, dedup, errors, prompts
-test/undercover.test.js     12 tests — spy assignment, phases, win conditions
-test/e2e/run.mjs            43 checks — the built bundle under /party-games-2/, API mocked
+test/undercover.test.js     16 tests — spy assignment, phases, win conditions, blind spy
+test/e2e/run.mjs            48 checks — the built bundle under /party-games-2/, API mocked
 test/e2e/live-generation.mjs         — opt-in, hits OpenRouter for real
 ```
 

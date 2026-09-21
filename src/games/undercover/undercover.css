@@ -104,3 +104,14 @@
 }
 .uc-words .spy .label, .uc-words .spy .w { color: var(--spy); }
 .uc-reveal .spy-name { color: var(--spy); }
+
+.uc-mode {
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--surface); border: 1px solid var(--border);
+  transition: background 0.25s var(--ease), border-color 0.25s var(--ease);
+}
+.uc-mode:has(.switch[aria-checked='true']) {
+  background: color-mix(in oklab, var(--spy) 12%, transparent);
+  border-color: color-mix(in oklab, var(--spy) 42%, transparent);
+}

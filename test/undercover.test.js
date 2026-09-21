@@ -1,13 +1,15 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  createGame, wordFor, alive, spyOf, markSeen, allSeen, eliminate, revive, revealWords,
+  createGame, wordFor, secretFor, alive, spyOf, markSeen, allSeen, eliminate, revive, revealWords,
   defaultNames, MIN_PLAYERS,
 } from '../src/games/undercover/game.js'
 
 const PAIR = ['Sea', 'Lake']
 const mk = (n = 5, spyIndex = 2) =>
   createGame({ names: defaultNames(n), pair: PAIR, rng: () => spyIndex / n })
+const mkBlind = (n = 5, spyIndex = 2) =>
+  createGame({ names: defaultNames(n), pair: PAIR, rng: () => spyIndex / n, blindSpy: true })
 const seeAll = (g) => g.players.forEach((p) => markSeen(g, p.id))
 
 test('requires at least four players', () => {
@@ -116,4 +118,38 @@ test('player names are trimmed and blanks fall back to a seat number', () => {
   const g = createGame({ names: ['  Ann ', '', 'Bo', 'Cy'], pair: PAIR })
   assert.equal(g.players[0].name, 'Ann')
   assert.equal(g.players[1].name, 'Player 2')
+})
+
+test('by default the spy is told, and the badge goes to the spy alone', () => {
+  const g = mk(5, 2)
+  assert.equal(g.blindSpy, false)
+  assert.deepEqual(secretFor(g, 2), { word: 'Lake', spy: true })
+  assert.deepEqual(secretFor(g, 0), { word: 'Sea', spy: false })
+  assert.equal(g.players.filter((p) => secretFor(g, p.id).spy).length, 1)
+})
+
+test('a blind spy still gets the odd word but is never told', () => {
+  const g = mkBlind(5, 2)
+  assert.equal(g.blindSpy, true)
+  assert.equal(wordFor(g, 2), 'Lake')
+  assert.deepEqual(secretFor(g, 2), { word: 'Lake', spy: false })
+})
+
+test('no peek screen in blind mode says anything but the word', () => {
+  for (let i = 0; i < 200; i++) {
+    const g = createGame({ names: defaultNames(6), pair: PAIR, blindSpy: true })
+    assert.equal(g.players.filter((p) => secretFor(g, p.id).spy).length, 0)
+    const words = g.players.map((p) => secretFor(g, p.id).word)
+    assert.equal(words.filter((w) => w === 'Lake').length, 1)
+  }
+})
+
+test('blind mode changes nothing about the round or the final reveal', () => {
+  const g = mkBlind(5, 2)
+  seeAll(g)
+  assert.equal(g.phase, 'play')
+  assert.equal(eliminate(g, spyOf(g).id).kind, 'spy')
+  assert.equal(g.caught, true)
+  assert.equal(g.phase, 'over')
+  assert.equal(g.spyWord, 'Lake')
 })

@@ -349,6 +349,59 @@ await section('undercover', async () => {
   await page.__ctx.close()
 })
 
+/* --------------------------- undercover: blind spy ------------------------ */
+await section('undercover blind spy', async () => {
+  const page = await newPage()
+  await page.goto(`${URL_}#/g/undercover`, { waitUntil: 'networkidle' })
+  await page.click('.uc-mode .switch')
+  await page.click('text=Deal words')
+  await page.waitForSelector('.uc-player', { timeout: 5000 })
+
+  const peeks = []
+  for (let i = 0; i < 4; i++) {
+    const box = await (await page.$(`.uc-player .hold >> nth=${i}`)).boundingBox()
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.mouse.down()
+    await page.waitForSelector('.uc-secret', { timeout: 4000 })
+    peeks.push(await page.$eval('.uc-secret', (el) => ({
+      word: el.querySelector('.word').textContent.trim(),
+      keep: el.querySelector('.keep').textContent.trim(),
+      tell: el.classList.contains('spy') || !!el.querySelector('.badge'),
+    })))
+    await page.mouse.up()
+    await page.waitForSelector('.uc-secret', { state: 'detached', timeout: 3000 })
+  }
+
+  await check('one player still holds the odd word', async () => {
+    const counts = {}
+    for (const { word } of peeks) counts[word] = (counts[word] || 0) + 1
+    const vals = Object.values(counts).sort((a, b) => b - a)
+    assert(vals.length === 2 && vals[0] === 3 && vals[1] === 1, `distribution ${JSON.stringify(counts)}`)
+  })
+  await check('no screen hints at who the spy is', async () => {
+    assert(peeks.every((x) => !x.tell), 'the spy was told')
+    assert(new Set(peeks.map((x) => x.keep)).size === 1, `peek copy differed: ${JSON.stringify(peeks.map((x) => x.keep))}`)
+  })
+  await check('the reveal still names the spy and both words', async () => {
+    await page.click('text=Show the words')
+    await page.waitForSelector('.sheet', { timeout: 3000 })
+    await page.click('text=Show them')
+    await page.waitForSelector('.uc-reveal', { timeout: 4000 })
+    const shown = await page.$$eval('.uc-words .w', (els) => els.map((e) => e.textContent.trim()))
+    assert(shown.length === 2, 'both words not shown')
+    assert(/was the spy/.test(await page.textContent('.uc-reveal')), 'the spy was not named')
+  })
+  await check('the mode choice is remembered', async () => {
+    await page.reload({ waitUntil: 'networkidle' })
+    await page.waitForSelector('.uc-mode', { timeout: 4000 })
+    assert((await page.getAttribute('.uc-mode .switch', 'aria-checked')) === 'true', 'toggle did not persist')
+  })
+  await check('blind undercover produced no errors', async () => {
+    assert(page.__errors.length === 0, page.__errors.join('; '))
+  })
+  await page.__ctx.close()
+})
+
 /* --------------------------- heads up: fallback --------------------------- */
 await section('headsup fallback', async () => {
   const page = await newPage()
