@@ -112,6 +112,7 @@ export function say(text, { delay = 0 } = {}) {
       const u = new SpeechSynthesisUtterance(text)
       u.lang = 'en-US'
       u.rate = 1.05
+      u.volume = 0.6
       synth.speak(u)
     } catch (e) {
       /* speech is decorative; never break gameplay */

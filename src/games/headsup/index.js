@@ -299,13 +299,13 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
   const cue = (key, text) => {
     if (key === cueKey) return
     cueKey = key
-    say(text, { delay: 350 })
+    if (text) say(text, { delay: 350 })
   }
 
   const paintPrep = (snap) => {
     if (state.phase !== 'prep') return
     if (!snap.landscape) {
-      cue('rotate', 'Turn the phone sideways')
+      cue('rotate')
       prep.els.face.textContent = '📱'
       prep.els.face.classList.add('rotate-hint')
       prep.els.title.textContent = 'Turn the phone sideways'
@@ -315,14 +315,14 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
     }
     prep.els.face.classList.remove('rotate-hint')
     if (!snap.calibrated) {
-      cue('still', 'Hold still')
+      cue('still', 'Hold')
       prep.els.face.textContent = '🤚'
       prep.els.title.textContent = 'Hold still for a second'
       prep.els.body.textContent = 'Getting a reading on how you are holding it.'
       prep.els.ring.style.strokeDashoffset = '276.5'
       return
     }
-    cue('tilt', 'Tilt forward to start')
+    cue('tilt', 'Tilt')
     prep.els.face.textContent = '🙈'
     prep.els.title.textContent = 'Tilt forward to start'
     prep.els.body.textContent = 'Tip the top of the phone down and hold until the ring fills.'
@@ -428,7 +428,6 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
   }
 
   const badOrientation = () => {
-    say('Turn the phone sideways', { delay: 200 })
     setOverlay(h('div', { class: 'hu-overlay' },
       h('div', { class: 'big-emoji rotate-hint' }, '📱'),
       h('h2', {}, 'Keep it horizontal'),
@@ -437,7 +436,7 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
   }
 
   const holdStill = () => {
-    say('Hold still')
+    say('Hold')
     setOverlay(h('div', { class: 'hu-overlay' },
       h('div', { class: 'big-emoji' }, '🤚'),
       h('h2', {}, 'Hold still'),
