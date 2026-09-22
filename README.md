@@ -39,7 +39,7 @@ and refreshes work on Pages without any server rewrites or `404.html` tricks.
 ## Word generation (bring your own key)
 
 Open **Settings → Word generation** and paste an [OpenRouter](https://openrouter.ai/keys)
-key. Default model is `openai/gpt-5.6-luna`; any OpenRouter model ID works. Without a key
+key. Default model is `openai/gpt-6-luna`; any OpenRouter model ID works. Without a key
 the games show a prompt to add one instead of a Start button.
 
 > **There is no built-in API key, by design.** This is a static site: anything shipped in

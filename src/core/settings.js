@@ -2,7 +2,7 @@ import { lsGet, lsSet } from './storage.js'
 
 export const DEFAULTS = {
   apiKey: '',
-  model: 'openai/gpt-5.6-luna',
+  model: 'openai/gpt-6-luna',
   language: 'en',
   customLanguage: '',
   difficulty: 3,

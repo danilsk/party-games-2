@@ -31,7 +31,7 @@ const check = (name, ok, extra = '') => {
 await page.addInitScript((key) => {
   localStorage.setItem(
     'pg2:settings',
-    JSON.stringify({ apiKey: key, model: 'openai/gpt-5.6-luna', language: 'en', difficulty: 2, format: 'word', topic: 'space', sound: false, haptics: false })
+    JSON.stringify({ apiKey: key, model: 'openai/gpt-6-luna', language: 'en', difficulty: 2, format: 'word', topic: 'space', sound: false, haptics: false })
   )
 }, KEY)
 await page.goto(URL_, { waitUntil: 'networkidle' })
