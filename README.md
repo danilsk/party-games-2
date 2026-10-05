@@ -11,10 +11,10 @@ framework, no backend.
 | 🎭 **Charades** | The word flashes for two seconds, then hides. Press and hold to peek again. 2+ players. |
 | 🕵️ **Undercover** | Everyone gets the same word — except one spy, who gets a suspiciously similar one. Optionally the spy is never told either. 4+ players. |
 
-Every word is written on demand by a model, so the app needs your own OpenRouter key. There
-is no bundled word list: nothing repeats, and any topic you can describe in a sentence
-works. The app shell is cached for fast loads and installability, but playing needs a
-connection.
+The games come with large built-in decks in English, Russian and Spanish, written and
+reviewed by models ahead of time, so they work without a key and offline. An OpenRouter key
+is optional: with one, a model writes fresh words once a deck runs out, for any other
+language and for topics you describe yourself.
 
 ## Quick start
 
@@ -36,37 +36,63 @@ The site is served from `/party-games-2/`, set as `base` in `vite.config.js`. Ch
 one constant if you rename the repo. Routing is hash-based (`#/g/headsup`), so deep links
 and refreshes work on Pages without any server rewrites or `404.html` tricks.
 
-## Word generation (bring your own key)
+## Words
 
-Open **Settings → Word generation** and paste an [OpenRouter](https://openrouter.ai/keys)
-key. Default model is `openai/gpt-6-luna`; any OpenRouter model ID works. Without a key
-the games show a prompt to add one instead of a Start button.
+**Controls.** Heads Up has a **topic** (75 presets, or anything you type) and
+**levels**; Charades has **levels** only; Undercover has neither. Levels are Easy, Medium
+and Hard, and are toggles — any mix works, e.g. Medium + Hard. Every game has a
+**language**: English, Русский, Español, or any language you type.
+
+**Built-in decks** live in `src/content/bank/`, one module per game and language, loaded
+only when that game is played:
+
+| | English | Russian | Spanish |
+|---|---|---|---|
+| Heads Up words | 14,163 | 13,742 | 7,898 |
+| Charades words | 1,260 | 1,225 | 687 |
+| Undercover pairs | 996 | 946 | 495 |
+
+Each Heads Up topic has its own deck per level. *Anything goes* draws from every topic, but
+only words that everyone knows regardless of topic. In the Mexico, Ukraine and Georgia
+decks the level means how far into the country you have to be: famous worldwide, known to
+visitors, known to people who live there. Spanish decks use Mexican Spanish. Undercover
+pairs are dealt in a random order, so either word can go to the spy.
+
+The decks were written by GPT-6.1 Sol and kept only when two judges from other model
+families both approved: Claude Sonnet 5.5 plus Gemini 3.8 Flash or Claude Opus 5.5 (for
+Undercover pairs, both scored it 6/10 or higher). The judges checked that everyone knows the item, that it
+plays well, that the language is natural, and its level. A last pass removed near-duplicates,
+and no word appears in more than one Undercover pair.
+
+**Your own key.** Open **Settings → Word generation** and paste an
+[OpenRouter](https://openrouter.ai/keys) key. Default model is `openai/gpt-6.1-sol` at low
+thinking effort; any OpenRouter model ID works, and **Reset** puts the default back. The key
+is used when a deck runs out, for a language without a deck, and for custom topics. Without
+a key those setups show a prompt to add one; a deck that has run out says so and offers to
+play its words again.
 
 > **There is no built-in API key, by design.** This is a static site: anything shipped in
 > its source is readable by anyone who opens the page. Your key is stored in this
 > browser's `localStorage` and sent only to OpenRouter. Never commit a key to this repo.
 
-You control **language** (English, Russian, or any language you type), **difficulty** 1–5,
-**format** (single word / phrase / both) and **topic** — 59 presets plus freeform input.
 Custom topics are not restricted to categories; the model is told to interpret them
 literally, so prompts like *"something a 40 and a 20 year old would picture differently"*
 work as topics.
 
 ### Non-repetition
 
-Every item ever generated is stored in IndexedDB, keyed by `mode|language|topic`, and the
-most recent 500 for that topic are sent with each request so the model actively avoids
-them. Topics never contaminate each other, and difficulty/format changes deliberately do
-*not* reset the memory — switching to "hard" should not resurrect words you already saw.
-Manage or clear it under **Settings → Word memory**.
+Every word shown is stored in IndexedDB, keyed by `mode|language|topic`. A deck skips
+anything already seen in that game and language under *any* topic, so switching from
+*Anything goes* to *Animals* does not bring words back, and changing levels never
+resurrects old ones. Generated words are checked the same way, and the most recent 500 for
+the topic are sent with each request so the model avoids them. Heads Up and Charades keep
+separate memories, and an Undercover pair counts as a repeat in either order. Manage or
+clear it under **Settings → Word memory**.
 
-Batches are fetched ahead of demand (refill starts while ~14 items remain) and the queue is
-persisted across sessions, so a round does not normally wait on the network. If the buffer
-does drain, the game shows a brief "getting more" state and resumes rather than dead-ending.
-
-The dedup window deliberately matches the window sent to the model. Filtering against more
-history than the model was told to avoid would silently discard legitimate items and look
-like the model returned nothing.
+Generated batches are fetched ahead of demand (refill starts while ~14 items remain, which
+includes the last words of a deck) and persisted across sessions, so a round does not
+normally wait on the network. If it does, the game shows a brief "getting more" state and
+resumes rather than dead-ending.
 
 ## Heads Up tilt detection
 
@@ -140,8 +166,9 @@ OPENROUTER_API_KEY_GENERAL=sk-or-... node test/e2e/live-generation.mjs
 
 That is the whole contract. The home screen, router (`#/g/<id>`), per-game theming
 (`[data-game="<id>"]` accent tokens) and code-splitting follow automatically. Shared
-pieces worth reusing: `contentSetup()` for topic/difficulty/language controls,
-`startButton()`/`noKeyBanner()` for the API-key gate, `wordFeed`/`pairFeed` for content,
+pieces worth reusing: `contentSetup({ topic, levels })` for the topic, level and language
+controls, `startButton()`/`noKeyBanner()` for the API-key gate, `wordFeed`/`mimeFeed`/`pairFeed`
+for content,
 and `keepAwake`, `sfx`, `haptic`, `holdable`, `sheet`.
 
 ## Notes
@@ -149,8 +176,8 @@ and `keepAwake`, `sfx`, `haptic`, `holdable`, `sheet`.
 - Icons are generated from source, not committed as opaque binaries: `npm run icons`.
 - Sound is synthesized with the Web Audio API — no audio files to download.
 - The service worker precaches the app shell and hashed assets, serves assets cache-first
-  and navigations network-first, and never touches cross-origin requests. It makes the app
-  load instantly and stay installable; it does not make the games playable offline.
+  and navigations network-first, and never touches cross-origin requests. The built-in decks
+  are part of that cache, so the games play offline; only generated words need a connection.
 - Fullscreen is enforced everywhere: the manifest asks for `display: fullscreen`, and on top
   of that a gate overlay covers the app whenever `document.fullscreenElement` is empty and
   takes a tap to call `requestFullscreen()` — the only way to keep Android's status bar

@@ -1,8 +1,8 @@
-// Per-topic memory of everything generated, so batches never repeat across sessions.
+// Per-topic memory of everything shown or generated, so words never repeat across sessions.
 
 import { idbGet, idbPut, idbAll, idbDelete } from '../core/storage.js'
 
-const STORE_CAP = 2000
+const STORE_CAP = 5000
 export const SEND_CAP = 500
 
 export function slug(value) {
@@ -17,7 +17,7 @@ export function slug(value) {
     .replace(/ /g, '-')
 }
 
-// Deliberately excludes difficulty and format: switching those should not resurrect old words.
+// Deliberately excludes levels: switching those should not resurrect old words.
 export function historyKey({ mode, language, topic }) {
   return `${mode}|${slug(language) || 'en'}|${slug(topic) || 'mixed'}`
 }
@@ -57,9 +57,28 @@ export async function historySummary() {
     .sort((a, b) => b.updated - a.updated)
 }
 
+/** Everything seen in a game and language, across all topics, as ids from `toId`. */
+export async function seenIds(mode, language, toId) {
+  const prefix = `${mode}|${slug(language) || 'en'}|`
+  const out = new Set()
+  for (const r of await idbAll('history')) if (r.key.startsWith(prefix)) for (const i of r.items) out.add(toId(i))
+  return out
+}
+
+/** Drops the given ids from every topic's memory for a game and language. */
+export async function forgetIds(mode, language, ids, toId) {
+  const prefix = `${mode}|${slug(language) || 'en'}|`
+  for (const r of await idbAll('history')) {
+    if (!r.key.startsWith(prefix)) continue
+    const items = r.items.filter((i) => !ids.has(toId(i)))
+    if (items.length !== r.items.length) await idbPut('history', { ...r, items })
+  }
+}
+
 export async function clearHistory(key) {
   if (key) await idbDelete('history', key)
   else for (const r of await idbAll('history')) await idbDelete('history', r.key)
 }
 
 export const pairKey = (pair) => `${pair[0]}|${pair[1]}`
+export const pairId = (key) => String(key).toLowerCase().split('|').sort().join('|')

@@ -1,4 +1,4 @@
-import { h, clear, toast } from '../../ui/dom.js'
+import { h, clear, toast, capFirst } from '../../ui/dom.js'
 import { back, navigate, interceptBack } from '../../core/router.js'
 import { settings, activeTopic, activeLanguage } from '../../core/settings.js'
 import { sfx, say, hush, unlockAudio } from '../../core/audio.js'
@@ -42,7 +42,7 @@ function setupScreen(root, show, ctx) {
     wordFeed.prime()
   }
 
-  const banner = noKeyBanner()
+  const banner = noKeyBanner(wordFeed)
   const startBtn = startButton('▶︎  Start round', async (btn) => {
     unlockAudio()
     btn.disabled = true
@@ -58,7 +58,7 @@ function setupScreen(root, show, ctx) {
       return toast(wordFeed.status.error?.message || 'Could not get any words', { bad: true })
     }
     show((r, s, c) => roundScreen(r, s, c, { sensor, motion: res }))
-  })
+  }, wordFeed)
 
   const goBack = () => back()
   screen.append(
@@ -69,7 +69,7 @@ function setupScreen(root, show, ctx) {
       h('button', { class: 'icon-btn', 'aria-label': 'How to play', onclick: howToPlay }, '?')
     ),
     h('div', { class: 'setup' },
-      contentSetup({ onChange: sync }),
+      contentSetup({ onChange: sync, topic: true, levels: true }),
       h('div', { class: 'stack' }, banner, status, startBtn)
     )
   )
@@ -198,6 +198,7 @@ function roundScreen(root, show, ctx, { sensor, motion }) {
         return finish()
       }
     }
+    w = capFirst(w)
     state.current = w
     word.textContent = w
     word.style.animation = 'none'

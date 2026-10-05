@@ -14,19 +14,19 @@
 .topic-btn .t-emoji { font-size: 32px; }
 .topic-btn .t-name { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
 
-.diff-dots { display: flex; gap: var(--sp-2); }
-.diff-dots button {
+.level-toggles { display: flex; gap: var(--sp-2); }
+.level-toggles button {
   flex: 1; height: 52px;
   border-radius: var(--r-md);
   background: var(--surface); border: 1px solid var(--border);
-  font-size: 17px; font-weight: 800; color: var(--text-dim);
+  font-size: 15px; font-weight: 800; color: var(--text-dim);
   transition: transform 0.16s var(--pop), background 0.2s, color 0.2s;
 }
-.diff-dots button[aria-pressed='true'] {
+.level-toggles button[aria-pressed='true'] {
   background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
   color: var(--accent-ink); border-color: transparent;
 }
-.diff-dots button:active { transform: scale(0.93); }
+.level-toggles button:active { transform: scale(0.93); }
 
 .topic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: var(--sp-2); }
 .topic-tile {
@@ -45,3 +45,6 @@
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; }
 .dot.warn { background: var(--warn); }
 .dot.bad { background: var(--bad); }
+
+.seg.compact button { padding: 0 6px; font-size: 14px; }
+.link-btn { flex: none; font-weight: 700; color: var(--brand); text-decoration: underline; text-underline-offset: 3px; }

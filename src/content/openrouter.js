@@ -76,7 +76,7 @@ export function normalizePairs(payload) {
   return out
 }
 
-export async function callOpenRouter({ apiKey, model, system, user, signal, maxTokens = 2000 }) {
+export async function callOpenRouter({ apiKey, model, effort, system, user, signal, maxTokens = 4000 }) {
   if (!apiKey) throw new GenerationError('No API key', { kind: 'no-key' })
   let res
   try {
@@ -97,6 +97,7 @@ export async function callOpenRouter({ apiKey, model, system, user, signal, maxT
         ],
         response_format: { type: 'json_object' },
         max_tokens: maxTokens,
+        ...(effort ? { reasoning: { effort } } : {}),
       }),
     })
   } catch (e) {

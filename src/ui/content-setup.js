@@ -1,6 +1,7 @@
-import { h, sheet, segmented, clear } from './dom.js'
+import { h, sheet, segmented, clear, toast } from './dom.js'
 import { settings, activeTopic, activeLanguage } from '../core/settings.js'
-import { TOPIC_PRESETS, TOPIC_BY_ID } from '../content/packs/topics.js'
+import { TOPIC_PRESETS, TOPIC_BY_ID, topicName } from '../content/packs/topics.js'
+import { bankLanguage } from '../content/bank.js'
 import { sfx } from '../core/audio.js'
 import { haptic } from '../core/haptics.js'
 import './content-setup.css'
@@ -22,19 +23,23 @@ export function muteButton() {
   return btn
 }
 
+const uiLanguage = () => bankLanguage(activeLanguage()) || 'en'
+
 export function topicLabel() {
   const s = settings.all
+  const lang = uiLanguage()
   if (s.topic === 'custom') return { emoji: '✨', name: s.customTopic.trim() || 'Custom topic' }
-  if (s.topic === 'mixed') return { emoji: '🎲', name: 'Anything goes' }
   const t = TOPIC_BY_ID[s.topic]
-  if (!t) return { emoji: '🎲', name: 'Anything goes' }
-  return { emoji: t.emoji, name: s.language === 'ru' ? t.ru : t.en }
+  if (s.topic === 'mixed' || !t) return { emoji: '🎲', name: ANYTHING[lang] }
+  return { emoji: t.emoji, name: topicName(t, lang) }
 }
+
+const ANYTHING = { en: 'Anything goes', ru: 'Всё подряд', es: 'De todo' }
 
 function openTopicPicker(onPick) {
   sheet('Pick a topic', (close) => {
     const body = h('div', { class: 'stack' })
-    const lang = settings.get('language')
+    const lang = uiLanguage()
     const custom = h('input', {
       class: 'field', type: 'text', value: settings.get('customTopic'),
       placeholder: 'e.g. things a 40 and a 20 year old picture differently',
@@ -51,7 +56,7 @@ function openTopicPicker(onPick) {
 
     const grid = h('div', { class: 'topic-grid' })
     const tiles = [
-      { id: 'mixed', emoji: '🎲', en: 'Anything goes', ru: 'Всё подряд' },
+      { id: 'mixed', emoji: '🎲', ...ANYTHING },
       ...TOPIC_PRESETS.filter((t) => t.id !== 'mixed'),
     ]
     const search = h('input', { class: 'field', type: 'search', placeholder: 'Search topics…', 'aria-label': 'Search topics' })
@@ -59,7 +64,7 @@ function openTopicPicker(onPick) {
       const needle = q.trim().toLowerCase()
       clear(grid)
       for (const t of tiles) {
-        const name = lang === 'ru' ? t.ru : t.en
+        const name = topicName(t, lang)
         if (needle && !name.toLowerCase().includes(needle) && !t.en.toLowerCase().includes(needle)) continue
         grid.append(
           h('button', {
@@ -89,10 +94,37 @@ function openTopicPicker(onPick) {
   })
 }
 
+const LEVELS = [{ value: 1, label: 'Easy' }, { value: 2, label: 'Medium' }, { value: 3, label: 'Hard' }]
+
+/** Multi-select level toggles; the last selected level cannot be switched off. */
+function levelToggles(onChange) {
+  const wrap = h('div', { class: 'level-toggles', role: 'group', 'aria-label': 'Levels' })
+  const paint = () => {
+    const on = settings.get('levels')
+    clear(wrap)
+    for (const { value, label } of LEVELS) {
+      const pressed = on.includes(value)
+      wrap.append(h('button', {
+        'aria-pressed': String(pressed),
+        onclick: () => {
+          if (pressed && on.length === 1) {
+            sfx('skip'); haptic('skip')
+            return toast('Keep at least one level')
+          }
+          settings.set({ levels: pressed ? on.filter((l) => l !== value) : [...on, value].sort() })
+          sfx('tap'); haptic(); paint(); onChange()
+        },
+      }, label))
+    }
+  }
+  paint()
+  return wrap
+}
+
 /**
  * Shared pre-game content controls. `onChange` fires whenever the content config changes.
  */
-export function contentSetup({ onChange, showFormat = true } = {}) {
+export function contentSetup({ onChange, topic = false, levels = false } = {}) {
   const wrap = h('div', { class: 'setup-body' })
   const notify = () => onChange?.({ topic: activeTopic(), language: activeLanguage() })
 
@@ -110,61 +142,32 @@ export function contentSetup({ onChange, showFormat = true } = {}) {
   topicBtn.onclick = () => { sfx('tap'); haptic(); openTopicPicker(() => { paintTopic(); notify() }) }
   paintTopic()
 
-  const LEVELS = ['Dead easy', 'Easy', 'Normal', 'Hard', 'Brutal']
-  const diffLabel = h('span', { class: 'tiny dim' }, LEVELS[settings.get('difficulty') - 1])
-  const diff = h('div', { class: 'diff-dots', role: 'group', 'aria-label': 'Difficulty' })
-  const paintDiff = () => {
-    clear(diff)
-    for (let i = 1; i <= 5; i++) {
-      diff.append(h('button', {
-        'aria-pressed': String(settings.get('difficulty') === i),
-        'aria-label': `Difficulty ${i} of 5`,
-        onclick: () => {
-          settings.set({ difficulty: i })
-          diffLabel.textContent = LEVELS[i - 1]
-          sfx('tap'); haptic(); paintDiff(); notify()
-        },
-      }, String(i)))
-    }
-  }
-  paintDiff()
-
-  const langRow = h('div', { class: 'stack', style: { gap: 'var(--sp-2)' } },
-    h('div', { class: 'label' }, 'Language'),
-    segmented(
-      [{ value: 'en', label: 'English' }, { value: 'ru', label: 'Русский' }, { value: 'custom', label: 'Other…' }],
-      settings.get('language'),
-      (v) => {
-        settings.set({ language: v })
-        customLang.hidden = v !== 'custom'
-        paintTopic()
-        notify()
-      },
-      { label: 'Language' }
-    ))
+  const langSeg = segmented(
+    [{ value: 'en', label: 'English' }, { value: 'ru', label: 'Русский' }, { value: 'es', label: 'Español' }, { value: 'custom', label: 'Other…' }],
+    settings.get('language'),
+    (v) => {
+      settings.set({ language: v })
+      customLang.hidden = v !== 'custom'
+      paintTopic()
+      notify()
+    },
+    { label: 'Language' }
+  )
+  langSeg.classList.add('compact')
+  const langRow = h('div', { class: 'stack', style: { gap: 'var(--sp-2)' } }, h('div', { class: 'label' }, 'Language'), langSeg)
   const customLang = h('input', {
     class: 'field', type: 'text', value: settings.get('customLanguage'),
-    placeholder: 'e.g. Spanish, Polish, Japanese…', 'aria-label': 'Custom language',
+    placeholder: 'e.g. Polish, Japanese, Ukrainian…', 'aria-label': 'Custom language',
     hidden: settings.get('language') !== 'custom',
-    oninput: (e) => { settings.set({ customLanguage: e.target.value }); notify() },
+    oninput: (e) => { settings.set({ customLanguage: e.target.value }); paintTopic(); notify() },
   })
   langRow.append(customLang)
 
-  wrap.append(
-    topicBtn,
-    h('div', { class: 'stack', style: { gap: 'var(--sp-2)' } },
-      h('div', { class: 'row' }, h('span', { class: 'label grow' }, 'Difficulty'), diffLabel),
-      diff)
-  )
-  if (showFormat) {
+  if (topic) wrap.append(topicBtn)
+  if (levels) {
     wrap.append(h('div', { class: 'stack', style: { gap: 'var(--sp-2)' } },
-      h('div', { class: 'label' }, 'Format'),
-      segmented(
-        [{ value: 'word', label: 'Single word' }, { value: 'phrase', label: 'Phrase' }, { value: 'both', label: 'Both' }],
-        settings.get('format'),
-        (v) => { settings.set({ format: v }); notify() },
-        { label: 'Format' }
-      )))
+      h('div', { class: 'row' }, h('span', { class: 'label grow' }, 'Levels'), h('span', { class: 'tiny dim' }, 'Pick one or more')),
+      levelToggles(notify)))
   }
   wrap.append(langRow)
 
@@ -173,11 +176,12 @@ export function contentSetup({ onChange, showFormat = true } = {}) {
 
 /** Re-runs `fn` when the key or model changes, so a key added mid-screen takes effect. */
 export function onCredentialsChange(fn) {
-  let { apiKey, model } = settings.all
+  let { apiKey, model, effort } = settings.all
   return settings.subscribe((s) => {
-    if (s.apiKey === apiKey && s.model === model) return
+    if (s.apiKey === apiKey && s.model === model && s.effort === effort) return
     apiKey = s.apiKey
     model = s.model
+    effort = s.effort
     fn()
   })
 }
@@ -188,12 +192,24 @@ export function feedStatusLine(feed) {
     clear(el)
     if (status.state === 'no-key') {
       el.append(h('span', { class: 'dot warn' }), 'Needs an OpenRouter key')
+    } else if (status.state === 'exhausted') {
+      el.append(h('span', { class: 'dot warn' }), h('span', { class: 'grow' }, 'You have played every word here'),
+        h('button', {
+          class: 'link-btn',
+          onclick: async () => {
+            sfx('tap'); haptic()
+            await feed.replay()
+            toast('Old words are back in the deck')
+          },
+        }, 'Play them again'))
     } else if (status.state === 'loading' && size < 5) {
       el.append(h('span', { class: 'spinner' }), 'Writing fresh words…')
     } else if (status.state === 'error' && size < 5) {
       el.append(h('span', { class: 'dot bad' }), status.error?.message || 'Generation failed')
     } else if (size) {
-      el.append(h('span', { class: 'dot' }), `${size} ready`)
+      el.append(h('span', { class: 'dot' }), `${size.toLocaleString()} ready`)
+    } else if (!feed.loaded) {
+      el.append(h('span', { class: 'spinner' }), 'Loading words…')
     } else {
       el.append(h('span', { class: 'dot warn' }), 'No words yet')
     }
@@ -204,46 +220,44 @@ export function feedStatusLine(feed) {
 }
 
 /**
- * Start button that turns into a key prompt when there is no API key, and stays
- * in sync if the key is added from the settings sheet without leaving the screen.
+ * Start button that turns into a key prompt when the setup has no built-in words and no key,
+ * and stays in sync if the key is added from the settings sheet without leaving the screen.
  */
-export function startButton(label, onStart) {
+export function startButton(label, onStart, feed) {
   const btn = h('button', { class: 'btn btn-primary btn-lg btn-block' })
-  const hasKey = () => !!String(settings.get('apiKey') || '').trim()
   const paint = () => {
-    btn.textContent = hasKey() ? label : '🔑  Add your OpenRouter key'
+    btn.textContent = feed.needsKey ? '🔑  Add your OpenRouter key' : label
   }
   btn.onclick = async () => {
     sfx('tap')
     haptic('select')
-    if (!hasKey()) {
+    if (feed.needsKey) {
       const { openSettings } = await import('./settings.js')
       openSettings()
       return
     }
     onStart(btn)
   }
-  const off = settings.subscribe(paint)
-  paint()
-  btn.dispose = off
+  const offFeed = feed.subscribe(paint)
+  const offSettings = settings.subscribe(paint)
+  btn.dispose = () => { offFeed(); offSettings() }
   return btn
 }
 
-export function noKeyBanner() {
+export function noKeyBanner(feed) {
   const el = h('div', {})
   const paint = () => {
     clear(el)
-    if (String(settings.get('apiKey') || '').trim()) return
+    if (!feed.needsKey) return
     el.append(
       h('div', { class: 'banner' }, '🔑',
         h('span', {},
-          'Words are written on demand by a model, so this app needs your own ',
+          'There are no built-in words for this setup, so a model writes them on demand. Add your own ',
           h('strong', {}, 'OpenRouter key'),
-          '. Add one in settings — it is stored only on this device.'))
+          ' in settings — it is stored only on this device.'))
     )
   }
-  const off = settings.subscribe(paint)
-  paint()
+  const off = feed.subscribe(paint)
   el.dispose = off
   return el
 }

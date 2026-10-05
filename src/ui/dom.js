@@ -6,6 +6,9 @@ const SVG_TAGS = new Set([
   'text', 'tspan', 'linearGradient', 'radialGradient', 'stop', 'clipPath', 'mask', 'use',
 ])
 
+/** Capitalises a dealt word for display, leaving names like iPhone alone. */
+export const capFirst = (w) => (/^\p{Ll}\p{Lu}/u.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1))
+
 export function h(tag, props = {}, ...children) {
   // SVG needs createElementNS, and its properties are read-only objects, so attributes only.
   const svg = SVG_TAGS.has(tag)

@@ -2,11 +2,11 @@ import { lsGet, lsSet } from './storage.js'
 
 export const DEFAULTS = {
   apiKey: '',
-  model: 'openai/gpt-6-luna',
+  model: 'openai/gpt-6.1-sol',
+  effort: 'low',
   language: 'en',
   customLanguage: '',
-  difficulty: 3,
-  format: 'word',
+  levels: [2],
   topic: 'mixed',
   customTopic: '',
   sound: true,
@@ -17,7 +17,10 @@ export const DEFAULTS = {
   headsUpSensitivity: 'normal',
 }
 
+const OLD_DEFAULT_MODELS = ['openai/gpt-5.6-luna', 'openai/gpt-6-luna', 'openai/gpt-6-sol']
+
 const state = { ...DEFAULTS, ...lsGet('settings', {}) }
+if (OLD_DEFAULT_MODELS.includes(state.model)) state.model = DEFAULTS.model
 const subs = new Set()
 
 export const settings = {
@@ -54,7 +57,7 @@ export function activeLanguage() {
 
 export function languageLabel() {
   const l = activeLanguage()
-  return l === 'en' ? 'English' : l === 'ru' ? 'Русский' : l
+  return { en: 'English', ru: 'Русский', es: 'Español' }[l] || l
 }
 
 export function activeTopic() {

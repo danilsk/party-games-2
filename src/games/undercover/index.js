@@ -1,4 +1,4 @@
-import { h, clear, toast, sheet, holdable, switchRow } from '../../ui/dom.js'
+import { h, clear, toast, sheet, holdable, switchRow, capFirst } from '../../ui/dom.js'
 import { back, navigate, interceptBack } from '../../core/router.js'
 import { settings, activeTopic, activeLanguage } from '../../core/settings.js'
 import { sfx, unlockAudio } from '../../core/audio.js'
@@ -81,7 +81,7 @@ function setupScreen(root, show) {
   }
   drawNames()
 
-  const banner = noKeyBanner()
+  const banner = noKeyBanner(pairFeed)
   const startBtn = startButton('▶︎  Deal words', async (btn) => {
     unlockAudio()
     btn.disabled = true
@@ -93,11 +93,11 @@ function setupScreen(root, show) {
     btn.textContent = '▶︎  Deal words'
     if (!pair) return toast(pairFeed.status.error?.message || 'Could not get a word pair', { bad: true })
     try {
-      show(playScreen, createGame({ names, pair, blindSpy }))
+      show(playScreen, createGame({ names, pair: pair.map(capFirst), blindSpy }))
     } catch (e) {
       toast(e.message, { bad: true })
     }
-  })
+  }, pairFeed)
 
   const goBack = () => back()
   const screen = h('div', { class: 'screen' },
@@ -123,7 +123,7 @@ function setupScreen(root, show) {
             lsSet('uc:blind', v)
             sfx('tap'); haptic()
           }, 'Nobody is told they are the spy. The odd one out has to work it out from what everyone else says.')),
-        contentSetup({ onChange: sync, showFormat: false })
+        contentSetup({ onChange: sync })
       ),
       h('div', { class: 'stack' }, banner, status, startBtn)
     )

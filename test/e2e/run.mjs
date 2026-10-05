@@ -72,7 +72,7 @@ async function mockApi(ctx) {
   )
 }
 
-async function newPage({ motion = false, offline = false, apiKey = true, sw = false, fullscreen = true } = {}) {
+async function newPage({ motion = false, offline = false, apiKey = true, sw = false, fullscreen = true, settings = null } = {}) {
   const ctx = await browser.newContext({
     viewport: { width: 390, height: 844 },
     deviceScaleFactor: 3,
@@ -96,6 +96,12 @@ async function newPage({ motion = false, offline = false, apiKey = true, sw = fa
     await ctx.addInitScript(() => {
       if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.reject(new Error('sw disabled for tests'))
     })
+  }
+  if (settings) {
+    await ctx.addInitScript((extra) => {
+      const cur = JSON.parse(localStorage.getItem('pg2:settings') || '{}')
+      if (!cur.seeded) localStorage.setItem('pg2:settings', JSON.stringify({ ...cur, ...extra, seeded: true }))
+    }, settings)
   }
   if (apiKey) {
     await ctx.addInitScript(() => {
@@ -169,14 +175,27 @@ await section('app shell', async () => {
     }
     assert(man.json.icons.some((i) => i.purpose === 'maskable'), 'no maskable icon')
   })
-  await check('with no API key, games gate behind a key prompt instead of playing', async () => {
-    const p3 = await newPage({ apiKey: false })
+  const POLISH = { language: 'custom', customLanguage: 'Polish' }
+  await check('with no API key, built-in words play straight away', async () => {
+    const p6 = await newPage({ apiKey: false })
+    const calls = []
+    p6.on('request', (r) => { if (r.url().includes('openrouter.ai')) calls.push(r.url()) })
+    await p6.goto(`${URL_}#/g/charades`, { waitUntil: 'networkidle' })
+    await p6.waitForFunction(() => /ready/.test(document.querySelector('.feed-status')?.textContent || ''), { timeout: 5000 })
+    assert(!(await p6.$('.banner')), 'key banner shown although built-in words exist')
+    await p6.click('.setup .btn-primary')
+    await p6.waitForSelector('.ch-word', { timeout: 5000 })
+    assert(calls.length === 0, 'called OpenRouter without a key')
+    await p6.__ctx.close()
+  })
+  await check('with no API key, a language without built-in words gates behind a key prompt', async () => {
+    const p3 = await newPage({ apiKey: false, settings: POLISH })
     await p3.goto(`${URL_}#/g/charades`, { waitUntil: 'networkidle' })
     await p3.waitForSelector('.btn-primary', { timeout: 5000 })
     const label = await p3.textContent('.btn-primary')
     assert(/OpenRouter key/i.test(label), `start button said "${label}"`)
     assert(await p3.$('.banner'), 'no explanation banner')
-    assert(/Needs an OpenRouter key/i.test(await p3.textContent('.feed-status')), 'status not shown')
+    await p3.waitForFunction(() => /Needs an OpenRouter key/i.test(document.querySelector('.feed-status')?.textContent || ''), { timeout: 5000 })
     await p3.click('.btn-primary')
     await p3.waitForSelector('.sheet', { timeout: 3000 })
     assert(await p3.$('input[aria-label="OpenRouter API key"]'), 'settings did not open on the key field')
@@ -204,9 +223,10 @@ await section('app shell', async () => {
     }
   })
   await check('a key added from inside a game unblocks the start button', async () => {
-    const p5 = await newPage({ apiKey: false })
+    const p5 = await newPage({ apiKey: false, settings: POLISH })
     await mockApi(p5.__ctx)
     await p5.goto(`${URL_}#/g/charades`, { waitUntil: 'networkidle' })
+    await p5.waitForFunction(() => /OpenRouter key/.test(document.querySelector('.setup .btn-primary')?.textContent || ''), { timeout: 5000 })
     await p5.click('.setup .btn-primary')
     await p5.waitForSelector('.sheet', { timeout: 3000 })
     await p5.fill('input[aria-label="OpenRouter API key"]', 'sk-or-v1-late')
@@ -277,6 +297,11 @@ await section('undercover', async () => {
   await check('player names are editable', async () => {
     await page.fill('.uc-names input >> nth=0', 'Dan')
     assert((await page.inputValue('.uc-names input >> nth=0')) === 'Dan')
+  })
+  await check('undercover offers no topic or level options, only the language', async () => {
+    assert(!(await page.$('.topic-btn')), 'topic shown')
+    assert(!(await page.$('[aria-label="Levels"]')), 'levels shown')
+    assert(await page.$('[role="group"][aria-label="Language"]'), 'no language control')
   })
 
   await page.click('text=Deal words')
@@ -564,15 +589,27 @@ await section('pwa offline', async () => {
     const names = await page.$$eval('.game-card .name', (e) => e.map((x) => x.textContent))
     assert(names.length === 3, `offline home showed ${names.length} cards`)
   })
-  await offlineCheck('offline, a game says so instead of hanging', async () => {
+  await offlineCheck('offline, built-in words still play', async () => {
     // Last route registered wins: make the API genuinely unreachable, not mocked.
     await page.__ctx.route(
       (url) => url.hostname === 'openrouter.ai',
       (route) => route.abort()
     )
     await page.goto(`${URL_}#/g/charades`, { waitUntil: 'domcontentloaded' })
-    await page.waitForSelector('.btn-primary', { timeout: 8000 })
-    await page.click('.btn-primary')
+    await page.waitForFunction(() => /ready/.test(document.querySelector('.feed-status')?.textContent || ''), { timeout: 8000 })
+    await page.click('.setup .btn-primary')
+    await page.waitForSelector('.ch-word', { timeout: 5000 })
+  })
+  await offlineCheck('offline, a language without built-in words says so instead of hanging', async () => {
+    await page.evaluate(() => {
+      const s = JSON.parse(localStorage.getItem('pg2:settings') || '{}')
+      localStorage.setItem('pg2:settings', JSON.stringify({ ...s, language: 'custom', customLanguage: 'Polish' }))
+    })
+    await page.goto(URL_, { waitUntil: 'domcontentloaded' })
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.goto(`${URL_}#/g/charades`, { waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('.setup .btn-primary', { timeout: 8000 })
+    await page.click('.setup .btn-primary')
     await page.waitForFunction(
       () => /unavailable|could not|failed|network/i.test(document.body.innerText),
       { timeout: 20000 }
@@ -602,9 +639,37 @@ await section('settings', async () => {
     const txt = await page.textContent('.sheet')
     assert(/readable by anyone/i.test(txt), 'no key-exposure warning')
   })
-  await check('topic picker offers presets and a freeform topic', async () => {
-    await page.click('.sheet-backdrop')
+  await check('charades has levels but no topic; heads up has both', async () => {
+    await page.mouse.click(195, 30)
+    await page.waitForSelector('.sheet', { state: 'detached', timeout: 3000 })
     await page.goto(`${URL_}#/g/charades`, { waitUntil: 'networkidle' })
+    await page.waitForSelector('[aria-label="Levels"]', { timeout: 5000 })
+    assert(!(await page.$('.topic-btn')), 'charades shows a topic')
+    await page.goto(`${URL_}#/g/headsup`, { waitUntil: 'networkidle' })
+    await page.waitForSelector('.topic-btn', { timeout: 5000 })
+    assert(await page.$('[aria-label="Levels"]'), 'heads up has no levels')
+  })
+  await check('levels toggle independently and the last one stays on', async () => {
+    const pressed = () => page.$$eval('[aria-label="Levels"] button', (bs) => bs.map((b) => b.getAttribute('aria-pressed')).join(','))
+    assert((await pressed()) === 'false,true,false', `default levels ${await pressed()}`)
+    await page.click('[aria-label="Levels"] >> text=Hard')
+    assert((await pressed()) === 'false,true,true', 'hard did not join medium')
+    await page.click('[aria-label="Levels"] >> text=Medium')
+    await page.click('[aria-label="Levels"] >> text=Hard')
+    assert((await pressed()) === 'false,false,true', 'the last level was switched off')
+    const s = await page.evaluate(() => JSON.parse(localStorage.getItem('pg2:settings')))
+    assert(JSON.stringify(s.levels) === '[3]', JSON.stringify(s.levels))
+  })
+  await check('Spanish shows Spanish topic names', async () => {
+    await page.click('[aria-label="Language"] >> text=Español')
+    await page.click('.topic-btn')
+    await page.waitForSelector('.topic-grid', { timeout: 3000 })
+    assert(await page.$('.topic-tile:has-text("Comida y bebida")'), 'no Spanish topic names')
+    await page.mouse.click(195, 30)
+    await page.waitForSelector('.sheet', { state: 'detached', timeout: 3000 })
+    await page.click('[aria-label="Language"] >> text=English')
+  })
+  await check('topic picker offers presets and a freeform topic', async () => {
     await page.click('.topic-btn')
     await page.waitForSelector('.topic-grid', { timeout: 3000 })
     assert((await page.$$('.topic-tile')).length > 20, 'too few presets')
@@ -612,6 +677,16 @@ await section('settings', async () => {
     await page.click('text=Use this topic')
     await sleep(300)
     assert((await page.textContent('.topic-btn')).includes('plumber'), 'custom topic not applied')
+  })
+  await check('Reset brings back the default model and effort', async () => {
+    await page.goto(URL_, { waitUntil: 'networkidle' })
+    await page.click('button[aria-label="Settings"]')
+    await page.waitForSelector('.sheet', { timeout: 3000 })
+    await page.click('[aria-label="Thinking effort"] >> text=High')
+    await page.click('.sheet button:has-text("Reset")')
+    assert((await page.inputValue('input[aria-label="Model ID"]')) === 'openai/gpt-6.1-sol')
+    assert((await page.getAttribute('[aria-label="Thinking effort"] >> text=Low', 'aria-pressed')) === 'true')
+    assert(await page.isDisabled('.sheet button:has-text("Reset")'), 'reset still enabled at defaults')
   })
   await page.__ctx.close()
 })

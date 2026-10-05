@@ -1,10 +1,10 @@
-import { h, clear, toast, holdable, sheet } from '../../ui/dom.js'
+import { h, clear, toast, holdable, sheet, capFirst } from '../../ui/dom.js'
 import { back, interceptBack } from '../../core/router.js'
 import { settings, activeTopic, activeLanguage } from '../../core/settings.js'
 import { sfx, unlockAudio } from '../../core/audio.js'
 import { haptic } from '../../core/haptics.js'
 import { keepAwake } from '../../core/wakelock.js'
-import { wordFeed, feedConfigFromSettings } from '../../content/feed.js'
+import { mimeFeed, feedConfigFromSettings } from '../../content/feed.js'
 import { contentSetup, feedStatusLine, muteButton, startButton, noKeyBanner, onCredentialsChange } from '../../ui/content-setup.js'
 import { fitWord } from '../headsup/fit.js'
 import './charades.css'
@@ -27,25 +27,25 @@ function setupScreen(root, show) {
   let live = true
   const status = h('div', {})
   const sync = async () => {
-    await wordFeed.configure(feedConfigFromSettings(settings.all, activeLanguage(), activeTopic()))
+    await mimeFeed.configure(feedConfigFromSettings(settings.all, activeLanguage(), activeTopic()))
     if (!live) return
     status.firstChild?.dispose?.()
-    clear(status).append(feedStatusLine(wordFeed))
-    wordFeed.prime()
+    clear(status).append(feedStatusLine(mimeFeed))
+    mimeFeed.prime()
   }
 
-  const banner = noKeyBanner()
+  const banner = noKeyBanner(mimeFeed)
   const startBtn = startButton('▶︎  Start', async (btn) => {
     unlockAudio()
     btn.disabled = true
     btn.textContent = 'Getting words…'
-    await wordFeed.prime()
+    await mimeFeed.prime()
     if (!live) return
     btn.disabled = false
     btn.textContent = '▶︎  Start'
-    if (!wordFeed.size) return toast(wordFeed.status.error?.message || 'Could not get any words', { bad: true })
+    if (!mimeFeed.size) return toast(mimeFeed.status.error?.message || 'Could not get any words', { bad: true })
     show(playScreen)
-  })
+  }, mimeFeed)
 
   const goBack = () => back()
   const screen = h('div', { class: 'screen' },
@@ -56,7 +56,7 @@ function setupScreen(root, show) {
       h('button', { class: 'icon-btn', 'aria-label': 'How to play', onclick: howToPlay }, '?')
     ),
     h('div', { class: 'setup' },
-      contentSetup({ onChange: sync }),
+      contentSetup({ onChange: sync, levels: true }),
       h('div', { class: 'stack' }, banner, status, startBtn)
     )
   )
@@ -134,20 +134,20 @@ function playScreen(root, show) {
   }
 
   const next = async () => {
-    let w = wordFeed.take()
+    let w = mimeFeed.take()
     if (!w) {
       // Clear the old word first: it must never stay on screen while the next one loads.
       state.word = null
       hide()
       clear(card).append(loadingView, peekBar)
       nextBtn.disabled = true
-      w = await wordFeed.takeAsync()
+      w = await mimeFeed.takeAsync()
       if (!live) return
       nextBtn.disabled = false
       clear(card).append(hiddenView, peekBar)
-      if (!w) return toast(wordFeed.status.error?.message || 'No words left', { bad: true })
+      if (!w) return toast(mimeFeed.status.error?.message || 'No words left', { bad: true })
     }
-    state.word = w
+    state.word = capFirst(w)
     state.shown++
     count.textContent = `${state.shown} ${state.shown === 1 ? 'word' : 'words'}`
     sfx('select')

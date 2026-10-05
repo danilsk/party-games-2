@@ -1,4 +1,5 @@
-// Opt-in live check against OpenRouter. Needs OPENROUTER_API_KEY_GENERAL in the environment.
+// Opt-in live check of the OpenRouter fallback, using a language with no built-in words.
+// Needs OPENROUTER_API_KEY_GENERAL in the environment. Prints counts only, never words.
 import { chromium } from 'playwright'
 import { serve } from './server.mjs'
 import { fileURLToPath } from 'node:url'
@@ -28,10 +29,13 @@ const check = (name, ok, extra = '') => {
   if (!ok) fail++
 }
 
+await page.addInitScript(() => {
+  Object.defineProperty(document, 'fullscreenElement', { get: () => document.documentElement, configurable: true })
+})
 await page.addInitScript((key) => {
   localStorage.setItem(
     'pg2:settings',
-    JSON.stringify({ apiKey: key, model: 'openai/gpt-6-luna', language: 'en', difficulty: 2, format: 'word', topic: 'space', sound: false, haptics: false })
+    JSON.stringify({ apiKey: key, model: 'openai/gpt-6.1-sol', effort: 'low', language: 'custom', customLanguage: 'Polish', levels: [2, 3], sound: false, haptics: false })
   )
 }, KEY)
 await page.goto(URL_, { waitUntil: 'networkidle' })
@@ -70,8 +74,7 @@ for (let i = 0; i < 12; i++) {
   await new Promise((r) => setTimeout(r, 250))
 }
 check('served a full round of words', words.length === 12 && words.every(Boolean))
-check('no repeats within the session', new Set(words.map((w) => w.toLowerCase())).size === words.length, words.join(', '))
-check('single-word format respected', words.every((w) => !w.includes(' ')), words.filter((w) => w.includes(' ')).join(', '))
+check('no repeats within the session', new Set(words.map((w) => w.toLowerCase())).size === words.length)
 
 const history = await run(async () => {
   const db = await new Promise((res, rej) => {
@@ -83,11 +86,11 @@ const history = await run(async () => {
     const t = db.transaction('history', 'readonly').objectStore('history').getAll()
     t.onsuccess = () => res(t.result)
   })
-  return all.map((r) => ({ key: r.key, n: r.items.length, sample: r.items.slice(0, 3) }))
+  return all.map((r) => ({ key: r.key, n: r.items.length }))
 })
-check('history is persisted per topic in IndexedDB', history.length > 0, JSON.stringify(history))
-const spaceRow = history.find((r) => r.key.includes('space'))
-check('the played topic accumulated history', !!spaceRow && spaceRow.n >= 12, spaceRow ? `${spaceRow.n} items` : 'missing')
+check('history is persisted in IndexedDB', history.length > 0, JSON.stringify(history))
+const row = history.find((r) => r.key === 'mime|polish|mixed')
+check('the played game and language accumulated history', !!row && row.n >= 12, row ? `${row.n} items` : 'missing')
 
 // Sustained play must cross batch boundaries without ever stalling.
 for (let i = 0; i < 20; i++) {
@@ -109,7 +112,7 @@ const dupes = words
 check(
   'still no repeats after a refill crosses a batch boundary',
   dupes.length === 0,
-  dupes.map((d) => `"${d.w}" at #${d.i} (first seen #${d.first}); total=${words.length}`).join(', ')
+  `${dupes.length} repeats in ${words.length} words`
 )
 
 // Isolation: a different topic must not inherit the first topic's history.
