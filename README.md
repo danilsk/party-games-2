@@ -48,7 +48,7 @@ only when that game is played:
 
 | | English | Russian | Spanish |
 |---|---|---|---|
-| Heads Up words | 14,163 | 13,742 | 7,898 |
+| Heads Up words | 15,469 | 15,113 | 8,824 |
 | Charades words | 1,260 | 1,225 | 687 |
 | Undercover pairs | 996 | 946 | 495 |
 
@@ -58,8 +58,9 @@ decks the level means how far into the country you have to be: famous worldwide,
 visitors, known to people who live there. Spanish decks use Mexican Spanish. Undercover
 pairs are dealt in a random order, so either word can go to the spy.
 
-The decks were written by GPT-6.1 Sol and kept only when two judges from other model
-families both approved: Claude Sonnet 5.5 plus Gemini 3.8 Flash or Claude Opus 5.5 (for
+The decks were written by GPT-6.1 Sol, with extra words for the six topics at the top of the
+list written by Claude Opus 5.5. Items were kept only when two judges both approved:
+Claude Sonnet 5.5 plus Gemini 3.8 Flash or Claude Opus 5.5 (for
 Undercover pairs, both scored it 6/10 or higher). The judges checked that everyone knows the item, that it
 plays well, that the language is natural, and its level. A last pass removed near-duplicates,
 and no word appears in more than one Undercover pair.
